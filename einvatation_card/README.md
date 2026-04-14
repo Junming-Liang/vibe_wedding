@@ -78,14 +78,19 @@ npm run preview
 | `index.html` | 入口 HTML，含 viewport / 主题色 |
 | `vite.config.ts` | Vite 与开发服务器配置 |
 
+## 背景音乐
+
+`public/bgm.mp3` 构建后随站点发布。页面使用**隐藏 `<audio>` + 右下角圆形按钮**控制播放；在微信内会走 **`WeixinJSBridge.invoke('getNetworkType', …)`** 再 `play()`，便于系统放行。若仍无声，请检查 iPhone **静音拨杆**，或将 MP3 转为 **44.1kHz 立体声 CBR 128kbps** 再替换。
+
 ## 后续可扩展方向（按需自行添加）
 
 - 将「打开地图导航」的 `href` 换成真实高德 / 腾讯 / Google 地图链接。  
 - 增加相册轮播、音乐、滚动动效、多语言等。  
 - 接入后端表单做 RSVP（需另行部署接口）。
 
-```
+```bash
 cd ~/program/vibe_wedding/einvatation_card
 npm run build
-rsync -a --delete dist/ /home/wwwroot/wordpress/invite-2026/
+rsync -av --delete dist/ /home/wwwroot/wordpress/invite-2026/
+sudo chown -R www:www /home/wwwroot/wordpress/invite-2026
 ```
