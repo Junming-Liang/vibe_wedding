@@ -1,6 +1,6 @@
 import "./App.css";
 
-/** 集中改文案：姓名、时间、地点等 */
+/** 集中改文案：姓名、时间、地点等（微信链接预览的 title/description/og:url 在 index.html，请同步修改） */
 const INVITE = {
   coupleLine: "张三 & 李四",
   subtitle: "诚挚邀请您参加我们的婚礼",

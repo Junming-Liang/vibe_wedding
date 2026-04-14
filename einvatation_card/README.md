@@ -87,5 +87,5 @@ npm run preview
 ```
 cd ~/program/vibe_wedding/einvatation_card
 npm run build
-rsync -a --delete dist/ /home/wwwroot/wordpress/wedding-invite/
+rsync -a --delete dist/ /home/wwwroot/wordpress/invite-2026/
 ```
