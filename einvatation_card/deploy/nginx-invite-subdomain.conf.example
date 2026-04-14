@@ -1,0 +1,39 @@
+# 与 WordPress 分离：使用独立子域名，例如 wedding.jamilblog.top
+# 若需「同域名 + 子路径」、不备案子域，请改用：nginx-invite-same-domain.snippet.conf
+# 使用步骤见项目 README「部署到 Nginx」或下方注释。
+#
+# 1) 将本文件复制到 nginx 配置目录并改名，例如：
+#    sudo cp deploy/nginx-invite-subdomain.conf.example /etc/nginx/sites-available/wedding.jamilblog.top
+# 2) 修改 root 为服务器上 dist 的绝对路径（npm run build 生成）
+# 3) 将 server_name 改成你的子域名
+# 4) 启用站点并检测、重载：
+#    sudo ln -sf /etc/nginx/sites-available/wedding.jamilblog.top /etc/nginx/sites-enabled/
+#    sudo nginx -t && sudo systemctl reload nginx
+# 5) HTTPS（推荐，与主站一致）：
+#    sudo certbot --nginx -d wedding.jamilblog.top
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name wedding.jamilblog.top;
+
+    # 改为本机「构建产物」目录，例如：
+    # /root/program/vibe_wedding/einvatation_card/dist
+    # 或 /var/www/wedding-invite/dist
+    root /var/www/wedding-invite/dist;
+    index index.html;
+
+    # 静态资源缓存（可选）
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|webp|woff2?)$ {
+        try_files $uri =404;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    access_log /var/log/nginx/wedding-invite.access.log;
+    error_log  /var/log/nginx/wedding-invite.error.log;
+}
