@@ -142,6 +142,17 @@
   letter-spacing: 0.06em;
 }
 
+.bgm-error {
+  margin: 0.55rem auto 0;
+  max-width: 22rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.7rem;
+  background: rgba(196, 30, 58, 0.08);
+  color: #9d1c30;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
 .sections {
   display: flex;
   flex-direction: column;

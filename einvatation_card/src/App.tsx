@@ -19,10 +19,11 @@ const MAP_GAODE = `https://uri.amap.com/search?keyword=${encodeURIComponent(MAP_
 const MAP_BAIDU = `https://map.baidu.com/search?querytype=s&wd=${encodeURIComponent(INVITE.addressFull)}`;
 
 const BGM_HINT = "《红颜劫》· 甄嬛传主题曲";
+const BGM_SRC = `${import.meta.env.BASE_URL || "/"}bgm.mp3`;
 
 function bgmAbsoluteUrl(): string {
-  const base = (import.meta.env.BASE || "/").replace(/\/?$/, "/");
-  return `${window.location.origin}${base}bgm.mp3`;
+  const base = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
+  return new URL(`${base}bgm.mp3`, window.location.origin).toString();
 }
 
 type WxBridge = { invoke: (api: string, data: object, cb: () => void) => void };
@@ -42,56 +43,53 @@ function playAudioRobust(a: HTMLAudioElement): Promise<void> {
     return a.play();
   };
 
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const once = (p: Promise<void>) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(hardTimer);
-      void p.then(resolve).catch(reject);
-    };
-
-    const hardTimer = window.setTimeout(() => once(tryPlay()), 520);
-
+  return tryPlay().catch((directErr) => {
     prep();
     const ua = navigator.userAgent || "";
     if (!/MicroMessenger/i.test(ua)) {
-      once(tryPlay());
-      return;
+      throw directErr;
     }
 
-    const b = getWeixinJSBridge();
-    if (b) {
-      try {
-        b.invoke("getNetworkType", {}, () => once(tryPlay()));
-      } catch {
-        once(tryPlay());
-      }
-      return;
-    }
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (p: Promise<void>) => {
+        if (settled) return;
+        settled = true;
+        void p.then(resolve).catch(reject);
+      };
 
-    document.addEventListener(
-      "WeixinJSBridgeReady",
-      () => {
-        const b2 = getWeixinJSBridge();
-        if (b2) {
-          try {
-            b2.invoke("getNetworkType", {}, () => once(tryPlay()));
-          } catch {
-            once(tryPlay());
-          }
-        } else {
-          once(tryPlay());
+      const retryByBridge = () => {
+        const bridge = getWeixinJSBridge();
+        if (!bridge) {
+          reject(directErr);
+          return;
         }
-      },
-      { once: true }
-    );
+        try {
+          bridge.invoke("getNetworkType", {}, () => finish(tryPlay()));
+        } catch {
+          finish(tryPlay());
+        }
+      };
+
+      if (getWeixinJSBridge()) {
+        retryByBridge();
+        return;
+      }
+
+      document.addEventListener("WeixinJSBridgeReady", retryByBridge, { once: true });
+      window.setTimeout(() => {
+        if (!settled) {
+          finish(tryPlay());
+        }
+      }, 520);
+    });
   });
 }
 
 export default function App() {
   const [copied, setCopied] = useState(false);
   const [bgmOn, setBgmOn] = useState(false);
+  const [bgmError, setBgmError] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -100,12 +98,32 @@ export default function App() {
     a.setAttribute("playsinline", "true");
     a.setAttribute("webkit-playsinline", "true");
     a.setAttribute("x5-playsinline", "true");
+    a.volume = 1;
+    a.muted = false;
     const sync = () => setBgmOn(!a.paused);
+    const onError = () => {
+      const mediaError = a.error;
+      const code = mediaError?.code;
+      const detail =
+        code === 1
+          ? "播放被中止"
+          : code === 2
+            ? "网络错误"
+            : code === 3
+              ? "音频解码失败"
+              : code === 4
+                ? "音频资源不可用"
+                : "音频加载失败";
+      setBgmError(`背景音乐播放失败：${detail}`);
+      setBgmOn(false);
+    };
     a.addEventListener("play", sync);
     a.addEventListener("pause", sync);
+    a.addEventListener("error", onError);
     return () => {
       a.removeEventListener("play", sync);
       a.removeEventListener("pause", sync);
+      a.removeEventListener("error", onError);
     };
   }, []);
 
@@ -116,24 +134,22 @@ export default function App() {
     if (!a.paused) {
       a.pause();
       setBgmOn(false);
+      setBgmError("");
       return;
     }
 
-    if (!a.src) {
-      a.src = bgmAbsoluteUrl();
-      a.load();
-    }
+    a.src = bgmAbsoluteUrl();
+    setBgmError("");
 
     void playAudioRobust(a)
       .then(() => {
-        window.setTimeout(() => {
-          if (a.paused) {
-            void a.play().catch(() => {});
-          }
-          setBgmOn(!a.paused);
-        }, 120);
+        setBgmOn(!a.paused);
       })
-      .catch(() => setBgmOn(false));
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : "浏览器阻止了播放";
+        setBgmOn(false);
+        setBgmError(`背景音乐播放失败：${message}`);
+      });
   }, []);
 
   const copyAddress = useCallback(async () => {
@@ -167,7 +183,8 @@ export default function App() {
         className="bgm-audio-hidden"
         loop
         playsInline
-        preload="metadata"
+        preload="auto"
+        src={BGM_SRC}
         aria-hidden="true"
       />
 
@@ -204,6 +221,7 @@ export default function App() {
         </h1>
         <p className="lead">{INVITE.subtitle}</p>
         <p className="bgm-hint">{BGM_HINT}</p>
+        {bgmError ? <p className="bgm-error">{bgmError}</p> : null}
       </header>
 
       <main className="sections">
