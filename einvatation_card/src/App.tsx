@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import weddingPhotoSrc from "./assets/mogo_weding_picture.png";
 import "./App.css";
 
 /** 集中改文案；微信链接预览请同步改 index.html */
@@ -206,6 +207,24 @@ export default function App() {
       </header>
 
       <main className="sections">
+        <section className="card photo-card" aria-labelledby="photo-heading">
+          <h2 id="photo-heading" className="card-title">
+            结婚照
+          </h2>
+          <figure className="wedding-photo-wrap">
+            <img
+              className="wedding-photo"
+              src={weddingPhotoSrc}
+              width={1024}
+              height={1024}
+              alt={`${INVITE.groom}与${INVITE.bride}的结婚照`}
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption className="wedding-photo-caption">囍 · 留作纪念</figcaption>
+          </figure>
+        </section>
+
         <section className="card" aria-labelledby="when-heading">
           <h2 id="when-heading" className="card-title">
             良辰
