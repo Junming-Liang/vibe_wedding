@@ -14,6 +14,9 @@ const INVITE = {
   note: "您的到来是最好的祝福。若行程有变，请提前告知，感谢理解。",
 };
 
+/** 仓库主页（请柬页底开源说明用） */
+const REPO_URL = "https://github.com/Junming-Liang/vibe_wedding";
+
 const MAP_KEYWORD = "御海楼昆区店宴会接待中心";
 const MAP_GAODE = `https://uri.amap.com/search?keyword=${encodeURIComponent(MAP_KEYWORD)}&city=${encodeURIComponent("包头")}&coordinate=gaode&callnative=1`;
 const MAP_BAIDU = `https://map.baidu.com/search?querytype=s&wd=${encodeURIComponent(INVITE.addressFull)}`;
@@ -280,7 +283,18 @@ export default function App() {
         </section>
       </main>
 
-      <footer className="footer">恭候您的光临</footer>
+      <footer className="page-foot" aria-label="页脚">
+        <p className="footer">恭候您的光临</p>
+        <div className="oss-note" aria-label="开源说明">
+          <p className="oss-note__text">
+            请柬为新郎新娘自己开发，已开源至Github仓库{" "}
+            <a className="oss-note__link" href={REPO_URL} rel="noopener noreferrer">
+              vibe_wedding
+            </a>
+            ，欢迎Star Fork PR
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

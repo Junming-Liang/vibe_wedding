@@ -294,11 +294,46 @@
   background: linear-gradient(180deg, rgba(255, 253, 251, 0.2) 0%, var(--surface) 100%);
 }
 
-.footer {
-  text-align: center;
+.page-foot {
   margin-top: 2rem;
+  text-align: center;
+}
+
+.footer {
+  margin: 0;
   font-size: 0.88rem;
   color: var(--accent);
   font-weight: 600;
   letter-spacing: 0.18em;
+}
+
+.oss-note {
+  margin-top: 1.35rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid rgba(201, 162, 39, 0.28);
+  max-width: 22rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.oss-note__text {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.65;
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  opacity: 0.9;
+}
+
+.oss-note__link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(196, 30, 58, 0.25);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.oss-note__link:active {
+  opacity: 0.85;
 }
