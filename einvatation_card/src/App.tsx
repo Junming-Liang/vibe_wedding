@@ -9,10 +9,30 @@ const INVITE = {
   subtitle: "喜结良缘 · 敬备喜筵",
   dateLine: "2026 年 10 月 3 日 · 星期六",
   timeLine: "11:18 吉时开席",
+  /** 倒计时终点（与良辰一致，东八区） */
+  eventAt: "2026-10-03T11:18:00+08:00",
   venueName: "御海楼（昆区店）宴会接待中心",
   addressFull: "内蒙古包头市昆都仑区御海楼（昆区店）宴会接待中心",
   note: "您的到来是最好的祝福。若行程有变，请提前告知，感谢理解。",
 };
+
+type CountdownParts = { days: number; hours: number; minutes: number; seconds: number };
+
+function parseCountdown(targetMs: number, nowMs: number): CountdownParts | null {
+  const diff = targetMs - nowMs;
+  if (diff <= 0) return null;
+  const totalSec = Math.floor(diff / 1000);
+  return {
+    days: Math.floor(totalSec / 86400),
+    hours: Math.floor((totalSec % 86400) / 3600),
+    minutes: Math.floor((totalSec % 3600) / 60),
+    seconds: totalSec % 60,
+  };
+}
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
 
 /** 仓库主页（请柬页底开源说明用） */
 const REPO_URL = "https://github.com/Junming-Liang/vibe_wedding";
@@ -21,7 +41,6 @@ const MAP_KEYWORD = "御海楼昆区店宴会接待中心";
 const MAP_GAODE = `https://uri.amap.com/search?keyword=${encodeURIComponent(MAP_KEYWORD)}&city=${encodeURIComponent("包头")}&coordinate=gaode&callnative=1`;
 const MAP_BAIDU = `https://map.baidu.com/search?querytype=s&wd=${encodeURIComponent(INVITE.addressFull)}`;
 
-const BGM_HINT = "《红颜劫》· 甄嬛传主题曲";
 const BGM_SRC = `${import.meta.env.BASE_URL || "/"}bgm.mp3`;
 
 function bgmAbsoluteUrl(): string {
@@ -93,7 +112,23 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [bgmOn, setBgmOn] = useState(false);
   const [bgmError, setBgmError] = useState("");
+  const [countdown, setCountdown] = useState<CountdownParts | null>(() => {
+    const t = new Date(INVITE.eventAt).getTime();
+    return Number.isFinite(t) ? parseCountdown(t, Date.now()) : null;
+  });
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const targetMs = new Date(INVITE.eventAt).getTime();
+    if (!Number.isFinite(targetMs)) {
+      setCountdown(null);
+      return;
+    }
+    const tick = () => setCountdown(parseCountdown(targetMs, Date.now()));
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const a = audioRef.current;
@@ -223,7 +258,44 @@ export default function App() {
           <span className="name">{INVITE.bride}</span>
         </h1>
         <p className="lead">{INVITE.subtitle}</p>
-        <p className="bgm-hint">{BGM_HINT}</p>
+        <div
+          className="countdown-bar"
+          role="timer"
+          aria-label={
+            countdown
+              ? `距开席还有 ${countdown.days} 天 ${countdown.hours} 小时 ${countdown.minutes} 分 ${countdown.seconds} 秒`
+              : "良辰已到"
+          }
+        >
+          {countdown ? (
+            <>
+              <span className="countdown-bar__label">距开席</span>
+              <span className="countdown-bar__sep" aria-hidden="true">
+                ·
+              </span>
+              <span className="countdown-bar__vals">
+                <span className="countdown-pair">
+                  <span className="countdown-pair__num">{countdown.days}</span>
+                  <span className="countdown-pair__unit">天</span>
+                </span>
+                <span className="countdown-pair">
+                  <span className="countdown-pair__num">{pad2(countdown.hours)}</span>
+                  <span className="countdown-pair__unit">时</span>
+                </span>
+                <span className="countdown-pair">
+                  <span className="countdown-pair__num">{pad2(countdown.minutes)}</span>
+                  <span className="countdown-pair__unit">分</span>
+                </span>
+                <span className="countdown-pair">
+                  <span className="countdown-pair__num">{pad2(countdown.seconds)}</span>
+                  <span className="countdown-pair__unit">秒</span>
+                </span>
+              </span>
+            </>
+          ) : (
+            <span className="countdown-bar__done">良辰已到，盼与您相逢</span>
+          )}
+        </div>
         {bgmError ? <p className="bgm-error">{bgmError}</p> : null}
       </header>
 
