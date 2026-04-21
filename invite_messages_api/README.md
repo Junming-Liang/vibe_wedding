@@ -39,10 +39,15 @@ curl -sS http://127.0.0.1:3840/api/health
 
 本机 Node 未起、**`PORT` 与 `INVITE_MSG_UPSTREAM` 不一致**、或 PHP 与 Node 不同机未改上游/防火墙。先在跑 Node 的机器上 **`curl …/api/health`**。
 
-## systemd（示例）
+## systemd（开机自启）
+
+在 **`invite_messages_api`** 目录执行（自动写 unit、**`enable`**、**`restart`**）：
 
 ```bash
-sudo cp deploy/invite-messages-api.service.example /etc/systemd/system/invite-messages-api.service
-# 按实际路径编辑 unit 后：
-sudo systemctl daemon-reload && sudo systemctl enable --now invite-messages-api
+cd ~/program/vibe_wedding/invite_messages_api
+sudo ./deploy/install-systemd.sh
 ```
+
+可选：**`INVITE_MSG_API_USER=www`**（代码须在 **`www`** 可读路径，并 **`chown`**）；**`NODE_BIN=/path/to/node`**（如 nvm）。手工编辑示例见 **`deploy/invite-messages-api.service.example`**。
+
+查看状态 / 日志：**`systemctl status invite-messages-api`**、**`journalctl -u invite-messages-api -f`**。

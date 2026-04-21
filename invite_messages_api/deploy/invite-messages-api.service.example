@@ -1,6 +1,7 @@
-# 示例 systemd 单元。请将所有 /opt/vibe_wedding/invite_messages_api 替换为本机仓库绝对路径，
-# 将 User= 改为运行 Node 的系统用户（常与 php-fpm / nginx 一致，如 www）。
+# 手工示例。推荐一键安装（自动填路径、Node、用户）：
+#   cd .../invite_messages_api && sudo ./deploy/install-systemd.sh
 #
+# 若坚持手拷：替换路径与 User 后执行
 #   sudo cp deploy/invite-messages-api.service.example /etc/systemd/system/invite-messages-api.service
 #   sudo systemctl daemon-reload && sudo systemctl enable --now invite-messages-api
 
