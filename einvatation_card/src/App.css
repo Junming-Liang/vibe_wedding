@@ -399,3 +399,179 @@
 .oss-note__link:active {
   opacity: 0.85;
 }
+
+/* —— 祝福留言墙 —— */
+.message-wall-card {
+  overflow: hidden;
+}
+
+.message-wall-intro {
+  margin: 0 0 0.85rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.message-wall-viewport {
+  position: relative;
+  border-radius: 0.75rem;
+  border: 1px dashed rgba(201, 162, 39, 0.55);
+  background: linear-gradient(180deg, rgba(255, 253, 251, 0.95) 0%, rgba(255, 244, 246, 0.65) 100%);
+  padding: 0.55rem 0;
+  margin: 0 0 1rem;
+  min-height: 2.6rem;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
+
+.message-wall-track {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  white-space: nowrap;
+  gap: 0.15rem;
+  animation: message-wall-marquee linear infinite;
+  will-change: transform;
+}
+
+@keyframes message-wall-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.message-wall-chip {
+  display: inline-flex;
+  align-items: baseline;
+  font-size: 0.82rem;
+  color: var(--ink);
+  padding: 0.2rem 0.45rem;
+}
+
+.message-wall-author {
+  font-weight: 700;
+  color: var(--accent);
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-wall-colon {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.message-wall-text {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.message-wall-dot {
+  color: var(--accent-gold);
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.message-wall-empty {
+  margin: 0;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.message-wall-form {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.message-wall-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.12em;
+  margin-top: 0.25rem;
+}
+
+.message-wall-input,
+.message-wall-textarea {
+  width: 100%;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(122, 74, 79, 0.35);
+  background: rgba(255, 255, 255, 0.75);
+  padding: 0.55rem 0.65rem;
+  font: inherit;
+  color: var(--ink);
+  resize: vertical;
+  min-height: 2.75rem;
+}
+
+.message-wall-textarea {
+  min-height: 4.5rem;
+  line-height: 1.55;
+}
+
+.message-wall-counter {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.message-wall-hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.message-wall-banner {
+  margin: 0.15rem 0 0;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.55rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.message-wall-banner--ok {
+  background: rgba(201, 162, 39, 0.12);
+  color: #6a5210;
+  border: 1px solid rgba(201, 162, 39, 0.35);
+}
+
+.message-wall-banner--err {
+  background: rgba(196, 30, 58, 0.08);
+  color: #9d1c30;
+  border: 1px solid rgba(196, 30, 58, 0.18);
+}
+
+.message-wall-submit {
+  margin-top: 0.35rem;
+  width: 100%;
+  min-height: 46px;
+  border: none;
+  border-radius: 0.65rem;
+  cursor: pointer;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #fff8f5;
+  background: linear-gradient(155deg, #d42845 0%, #a8142c 100%);
+  box-shadow: 0 6px 22px rgba(196, 30, 58, 0.22);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.message-wall-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.message-wall-submit:active:not(:disabled) {
+  transform: scale(0.99);
+}

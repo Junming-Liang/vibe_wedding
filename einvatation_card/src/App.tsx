@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import weddingPhotoSrc from "./assets/mogo_weding_picture.png";
+import { MessageWall } from "./MessageWall";
 import "./App.css";
 
 /** 集中改文案；微信链接预览请同步改 index.html */
@@ -353,6 +354,8 @@ export default function App() {
         <section className="card note" aria-label="备注">
           <p>{INVITE.note}</p>
         </section>
+
+        <MessageWall />
       </main>
 
       <footer className="page-foot" aria-label="页脚">

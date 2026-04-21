@@ -50,6 +50,23 @@ Agent        → 自动催婚庆公司回消息
 
 ---
 
+## 💌 电子请柬与祝福留言墙
+
+仓库内已实现一套可部署的 **婚礼电子请柬**（`einvatation_card/`）与独立 **留言 API**（`invite_messages_api/`）：
+
+- 宾客可在请柬页提交祝福；仅 **审核通过** 的留言会在页面 **横向滚动留言墙** 上展示。
+- 新人通过自带简易 **审核页**（`/admin.html`）或 HTTP 接口，对待审留言执行 **通过 / 拒绝**。
+- 服务端包含 **SQLite 持久化**、**按 IP 限流**、**JSON 体积限制**、**Helmet 响应头**、**蜜罐字段**、**参数校验** 等基础防护；留言 API 默认 **仅监听本机**；管理审核 **无密钥、仅环回**；请正确配置 **CORS 白名单**。
+- 与 **WordPress 同域**部署时：优先用 Nginx 将 **`/invite-2026/api/`** 反代到 Node（不占根 **`/api`**）；若仅有静态 **`try_files`**，则使用站点根 **`invite-2026-messages-bridge.php`** 由 PHP 转发到本机 Node（见 `einvatation_card/README.md`）。
+
+详细安装、环境变量与 Nginx 反代示例见：
+
+- [`einvatation_card/README.md`](einvatation_card/README.md)
+- [`invite_messages_api/README.md`](invite_messages_api/README.md)（启动、502 排查、systemd）
+- [`invite_messages_api/.env.example`](invite_messages_api/.env.example)
+
+---
+
 ## 🗺️ Roadmap
 
 - [x] 写这个 README

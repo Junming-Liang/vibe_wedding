@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>请柬留言审核</title>
+    <style>
+      :root {
+        font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+        line-height: 1.5;
+        color: #222;
+        background: #faf7f4;
+      }
+      body {
+        margin: 0 auto;
+        max-width: 40rem;
+        padding: 1rem 1rem 2.5rem;
+      }
+      h1 {
+        font-size: 1.1rem;
+        margin: 0 0 0.75rem;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.75rem;
+      }
+      label {
+        font-size: 0.85rem;
+        color: #555;
+      }
+      select {
+        padding: 0.45rem 0.55rem;
+        border-radius: 0.35rem;
+        border: 1px solid #ccc;
+        min-width: 12rem;
+        font: inherit;
+      }
+      button {
+        font: inherit;
+        padding: 0.45rem 0.75rem;
+        border-radius: 0.35rem;
+        border: 1px solid #bbb;
+        background: #fff;
+        cursor: pointer;
+      }
+      button.primary {
+        background: #c41e3a;
+        color: #fff;
+        border-color: #a8142c;
+      }
+      button.ghost {
+        background: #f3f3f3;
+      }
+      button.btn-danger {
+        color: #9d1c30;
+        border-color: rgba(196, 30, 58, 0.45);
+        background: #fff5f5;
+      }
+      .admin-link-wrap {
+        margin: 0 0 0.75rem;
+        font-size: 0.82rem;
+      }
+      .admin-link-wrap a {
+        color: #0b5fff;
+        word-break: break-all;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #e6e0d8;
+        border-radius: 0.5rem;
+        padding: 0.75rem 0.85rem;
+        margin-bottom: 0.65rem;
+      }
+      .meta {
+        font-size: 0.75rem;
+        color: #666;
+        margin-bottom: 0.35rem;
+      }
+      .content {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .err {
+        color: #a8142c;
+        font-size: 0.85rem;
+        margin: 0.25rem 0 0;
+      }
+      .hint {
+        font-size: 0.78rem;
+        color: #666;
+        margin-top: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>请柬留言审核</h1>
+    <p id="admin-link-wrap" class="admin-link-wrap" hidden>
+      审核页直达（与 <code>GET /api/health</code> 中 <code>adminUrl</code> 一致）：
+      <a id="admin-link" href="#" target="_blank" rel="noopener noreferrer">加载中…</a>
+    </p>
+    <p class="hint">
+      本页<strong>仅允许在运行留言服务的服务器本机</strong>打开（服务默认监听 <code>127.0.0.1</code>，不对外网开放）。或 SSH 隧道后在本地浏览器打开。无需密钥。新留言状态为<strong>待审核</strong>，筛选请选「待审核」或「全部」。
+    </p>
+    <div class="row">
+      <label for="status">筛选</label>
+      <select id="status">
+        <option value="pending" selected>待审核</option>
+        <option value="approved">已通过</option>
+        <option value="rejected">已拒绝</option>
+        <option value="all">全部</option>
+      </select>
+      <button type="button" id="load">刷新列表</button>
+    </div>
+    <p id="msg" class="err" hidden></p>
+    <div id="list"></div>
+
+    <script>
+      (function () {
+        const apiBase = "";
+        const statusEl = document.getElementById("status");
+        const listEl = document.getElementById("list");
+        const msgEl = document.getElementById("msg");
+        const loadBtn = document.getElementById("load");
+
+        function showErr(t) {
+          msgEl.textContent = t || "";
+          msgEl.hidden = !t;
+        }
+
+        function jsonHeaders() {
+          return { Accept: "application/json", "Content-Type": "application/json" };
+        }
+
+        async function errBody(res) {
+          try {
+            const j = await res.json();
+            if (j && j.error) return j.error;
+          } catch (_) {}
+          return res.statusText || String(res.status);
+        }
+
+        async function loadHealthAdminLink() {
+          const wrap = document.getElementById("admin-link-wrap");
+          const a = document.getElementById("admin-link");
+          try {
+            const res = await fetch(apiBase + "/api/health");
+            if (!res.ok) return;
+            const j = await res.json();
+            const u = (j && (j.adminUrl || j.admin)) || "";
+            if (u && a && wrap) {
+              a.href = u;
+              a.textContent = u;
+              wrap.hidden = false;
+            }
+          } catch (_) {}
+        }
+
+        async function loadList() {
+          showErr("");
+          listEl.innerHTML = "";
+          const st = statusEl.value;
+          const res = await fetch(apiBase + "/api/admin/messages?status=" + encodeURIComponent(st), {
+            headers: jsonHeaders(),
+          });
+          if (res.status === 403) {
+            showErr(await errBody(res));
+            return;
+          }
+          if (!res.ok) {
+            showErr("加载失败：" + (await errBody(res)));
+            return;
+          }
+          const data = await res.json();
+          const items = data.items || [];
+          if (!items.length) {
+            listEl.textContent = "暂无数据";
+            return;
+          }
+          for (const m of items) {
+            const div = document.createElement("div");
+            div.className = "card";
+            div.innerHTML =
+              '<div class="meta">#' +
+              m.id +
+              " · " +
+              (m.status || "") +
+              " · " +
+              (m.createdAt || "") +
+              (m.clientIp ? " · IP " + escapeHtml(m.clientIp) : "") +
+              "</div>" +
+              '<div class="meta">署名：' +
+              escapeHtml(m.author || "（匿名）") +
+              "</div>" +
+              '<div class="content">' +
+              escapeHtml(m.content || "") +
+              "</div>";
+            const row = document.createElement("div");
+            row.className = "row";
+            if (m.status === "pending") {
+              const ok = document.createElement("button");
+              ok.className = "primary";
+              ok.type = "button";
+              ok.textContent = "通过";
+              ok.addEventListener("click", () => moderate(m.id, "approve"));
+              const no = document.createElement("button");
+              no.className = "ghost";
+              no.type = "button";
+              no.textContent = "拒绝";
+              no.addEventListener("click", () => moderate(m.id, "reject"));
+              row.appendChild(ok);
+              row.appendChild(no);
+            }
+            const del = document.createElement("button");
+            del.className = "btn-danger";
+            del.type = "button";
+            del.textContent = "删除";
+            del.addEventListener("click", () => removeMsg(m.id));
+            row.appendChild(del);
+            div.appendChild(row);
+            listEl.appendChild(div);
+          }
+        }
+
+        function escapeHtml(s) {
+          return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        }
+
+        async function moderate(id, action) {
+          showErr("");
+          const path = action === "approve" ? "approve" : "reject";
+          const res = await fetch(apiBase + "/api/admin/messages/" + id + "/" + path, {
+            method: "POST",
+            headers: jsonHeaders(),
+            body: "{}",
+          });
+          if (res.status === 403) {
+            showErr(await errBody(res));
+            return;
+          }
+          if (!res.ok) {
+            showErr("操作失败：" + (await errBody(res)));
+            return;
+          }
+          await loadList();
+        }
+
+        async function removeMsg(id) {
+          if (!confirm("确定删除留言 #" + id + "？不可恢复。")) return;
+          showErr("");
+          const res = await fetch(apiBase + "/api/admin/messages/" + id, {
+            method: "DELETE",
+            headers: jsonHeaders(),
+          });
+          if (res.status === 403) {
+            showErr(await errBody(res));
+            return;
+          }
+          if (!res.ok) {
+            showErr("删除失败：" + (await errBody(res)));
+            return;
+          }
+          await loadList();
+        }
+
+        loadBtn.addEventListener("click", loadList);
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", function () {
+            loadHealthAdminLink();
+            loadList();
+          });
+        } else {
+          loadHealthAdminLink();
+          loadList();
+        }
+      })();
+    </script>
+  </body>
+</html>

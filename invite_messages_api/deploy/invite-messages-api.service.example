@@ -1,0 +1,23 @@
+# 示例 systemd 单元。请将所有 /opt/vibe_wedding/invite_messages_api 替换为本机仓库绝对路径，
+# 将 User= 改为运行 Node 的系统用户（常与 php-fpm / nginx 一致，如 www）。
+#
+#   sudo cp deploy/invite-messages-api.service.example /etc/systemd/system/invite-messages-api.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now invite-messages-api
+
+[Unit]
+Description=Wedding invite messages API (SQLite + Express)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/vibe_wedding/invite_messages_api
+EnvironmentFile=/opt/vibe_wedding/invite_messages_api/.env
+# 默认 .env 中 HOST=127.0.0.1，不对外监听；勿随意改为 0.0.0.0
+ExecStart=/usr/bin/node /opt/vibe_wedding/invite_messages_api/src/server.js
+Restart=on-failure
+RestartSec=5
+User=www
+Group=www
+
+[Install]
+WantedBy=multi-user.target
