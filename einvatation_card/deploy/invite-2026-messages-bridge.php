@@ -1,6 +1,6 @@
 <?php
 /**
- * 请柬留言桥接：部署到 WordPress「站点根目录」（与 wp-config.php 同级），不要放在 /invite-2026/ 内，
+ * 请柬留言 / 赴宴登记桥接：部署到 WordPress「站点根目录」（与 wp-config.php 同级），不要放在 /invite-2026/ 内，
  * 否则易被 try_files 回退成 index.html，POST 仍 405。
  *
  * 浏览器请求：https://你的域名/invite-2026-messages-bridge.php
@@ -61,7 +61,7 @@ function curl_upstream(string $method, string $url, ?string $body = null): void
         http_response_code(502);
         echo json_encode(
             [
-                'error' => '留言服务不可达：本机 Node（invite_messages_api）未响应。请 systemctl 启动服务或先在该目录执行 npm run start。',
+                'error' => '请柬服务不可达：本机 Node（invite_messages_api）未响应。请 systemctl 启动服务或先在该目录执行 npm run start。',
                 'detail' => $err,
                 'upstream' => $url,
             ],
@@ -88,6 +88,18 @@ if ($method === 'GET') {
 }
 
 if ($method === 'POST') {
+    $action = $_GET['action'] ?? '';
+    $target = '/api/messages';
+    if ($action === '' || $action === 'message_submit') {
+        $target = '/api/messages';
+    } elseif ($action === 'visit_submit') {
+        $target = '/api/visits';
+    } else {
+        http_response_code(400);
+        echo json_encode(['error' => '缺少或无效的 action'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     $raw = file_get_contents('php://input');
     if (!is_string($raw)) {
         http_response_code(400);
@@ -99,7 +111,7 @@ if ($method === 'POST') {
         echo json_encode(['error' => '请求体过大'], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    curl_upstream('POST', $upstream . '/api/messages', $raw);
+    curl_upstream('POST', $upstream . $target, $raw);
     exit;
 }
 

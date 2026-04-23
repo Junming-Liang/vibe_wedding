@@ -41,6 +41,17 @@ db.exec(`
     client_ip TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
+  CREATE TABLE IF NOT EXISTS visits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    attendees INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    client_ip TEXT
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_visits_phone ON visits(phone);
+  CREATE INDEX IF NOT EXISTS idx_visits_updated_at ON visits(updated_at DESC);
 `);
 
 /** 管理接口仅允许环回（勿用 X-Forwarded-For 判断，防伪造）。经本机 Nginx 反代到 Node 时，对端仍为 127.0.0.1。 */
@@ -85,6 +96,27 @@ function clientIp(req) {
   if (first) return first.slice(0, 64);
   const ra = req.socket.remoteAddress;
   return typeof ra === "string" ? ra.slice(0, 64) : "";
+}
+
+function normalizeVisitName(raw) {
+  if (typeof raw !== "string") return null;
+  const t = raw.trim().replace(/\s+/g, " ");
+  if (!t) return null;
+  return t.slice(0, 24);
+}
+
+function normalizePhone(raw) {
+  if (typeof raw !== "string") return null;
+  const compact = raw.trim().replace(/[\s()-]+/g, "");
+  if (!compact) return null;
+  if (!/^\+?\d{6,20}$/.test(compact)) return null;
+  return compact.slice(0, 24);
+}
+
+function normalizeAttendees(raw) {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > 20) return null;
+  return n;
 }
 
 const app = express();
@@ -135,6 +167,14 @@ const submitLimiter = rateLimit({
   },
 });
 
+const visitSubmitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  handler: (_req, res) => {
+    json429(res, "提交过于频繁，请稍后再试");
+  },
+});
+
 const publicReadLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 120,
@@ -161,6 +201,57 @@ function mapAdminRow(r) {
     reviewedAt: r.reviewed_at ? new Date(r.reviewed_at).toISOString() : null,
     clientIp: r.client_ip || "",
   };
+}
+
+function mapVisitRow(r) {
+  return {
+    id: r.id,
+    name: r.name,
+    phone: r.phone,
+    attendees: r.attendees,
+    createdAt: new Date(r.created_at).toISOString(),
+    updatedAt: new Date(r.updated_at).toISOString(),
+    clientIp: r.client_ip || "",
+  };
+}
+
+function formatLocalDateTime(ms) {
+  const d = new Date(ms);
+  const parts = [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+  ];
+  const time = [
+    String(d.getHours()).padStart(2, "0"),
+    String(d.getMinutes()).padStart(2, "0"),
+    String(d.getSeconds()).padStart(2, "0"),
+  ];
+  return parts.join("-") + " " + time.join(":");
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildVisitsExcel(rows) {
+  const totalGuests = rows.length;
+  const totalAttendees = rows.reduce((sum, row) => sum + Number(row.attendees || 0), 0);
+  const tableRows = rows
+    .map(
+      (row, idx) =>
+        `<tr><td>${idx + 1}</td><td>${escapeHtml(row.name)}</td><td style="mso-number-format:'\\@';">${escapeHtml(row.phone)}</td><td>${row.attendees}</td><td>${escapeHtml(formatLocalDateTime(row.updated_at))}</td></tr>`,
+    )
+    .join("");
+  return (
+    "<html><head><meta charset=\"utf-8\"></head><body>" +
+    `<table border="1"><tr><th colspan="5">婚礼宾客来访统计</th></tr><tr><td colspan="2">登记人数</td><td>${totalGuests}</td><td>赴宴总人数</td><td>${totalAttendees}</td></tr><tr><th>序号</th><th>姓名</th><th>电话</th><th>参加宴席人数</th><th>更新时间</th></tr>${tableRows}</table>` +
+    "</body></html>"
+  );
 }
 
 function adminPageUrlForDocs() {
@@ -233,6 +324,43 @@ app.post("/api/messages", submitLimiter, (req, res) => {
   }
 });
 
+app.post("/api/visits", visitSubmitLimiter, (req, res) => {
+  const body = req.body || {};
+  const name = normalizeVisitName(body.name);
+  const phone = normalizePhone(body.phone);
+  const attendees = normalizeAttendees(body.attendees);
+
+  if (!name) {
+    return res.status(400).json({ error: "姓名不能为空，最多 24 个字" });
+  }
+  if (!phone) {
+    return res.status(400).json({ error: "电话格式无效，请填写 6 到 20 位数字" });
+  }
+  if (attendees == null) {
+    return res.status(400).json({ error: "参加宴席人数无效，请填写 1 到 20 之间的整数" });
+  }
+
+  const now = Date.now();
+  const ip = clientIp(req);
+  try {
+    const info = db
+      .prepare(
+        `INSERT INTO visits (name, phone, attendees, created_at, updated_at, client_ip)
+         VALUES (@name, @phone, @attendees, @now, @now, @ip)
+         ON CONFLICT(phone) DO UPDATE SET
+           name = excluded.name,
+           attendees = excluded.attendees,
+           updated_at = excluded.updated_at,
+           client_ip = excluded.client_ip`,
+      )
+      .run({ name, phone, attendees, now, ip });
+    res.status(201).json({ ok: true, id: Number(info.lastInsertRowid || 0) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "登记失败，请稍后再试" });
+  }
+});
+
 app.get("/api/admin/messages", adminLimiter, requireLoopback, (req, res) => {
   const status = (req.query.status || "pending").toString();
   const allowed = ["pending", "approved", "rejected", "all"];
@@ -300,6 +428,64 @@ app.delete("/api/admin/messages/:id", adminLimiter, requireLoopback, (req, res) 
     const r = db.prepare("DELETE FROM messages WHERE id = ?").run(id);
     if (r.changes === 0) {
       return res.status(404).json({ error: "留言不存在" });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "删除失败" });
+  }
+});
+
+app.get("/api/admin/visits", adminLimiter, requireLoopback, (_req, res) => {
+  try {
+    const rows = db
+      .prepare(
+        `SELECT id, name, phone, attendees, created_at, updated_at, client_ip
+         FROM visits
+         ORDER BY updated_at DESC, id DESC
+         LIMIT 1000`,
+      )
+      .all();
+    const items = rows.map(mapVisitRow);
+    const stats = {
+      totalGuests: items.length,
+      totalAttendees: items.reduce((sum, item) => sum + Number(item.attendees || 0), 0),
+    };
+    res.json({ items, stats });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
+app.get("/api/admin/visits/export", adminLimiter, requireLoopback, (_req, res) => {
+  try {
+    const rows = db
+      .prepare(
+        `SELECT name, phone, attendees, updated_at
+         FROM visits
+         ORDER BY updated_at DESC, id DESC`,
+      )
+      .all();
+    const xls = buildVisitsExcel(rows);
+    res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="wedding-visits-${Date.now()}.xls"`);
+    res.send("\ufeff" + xls);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "导出失败" });
+  }
+});
+
+app.delete("/api/admin/visits/:id", adminLimiter, requireLoopback, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    return res.status(400).json({ error: "无效的 id" });
+  }
+  try {
+    const r = db.prepare("DELETE FROM visits WHERE id = ?").run(id);
+    if (r.changes === 0) {
+      return res.status(404).json({ error: "登记记录不存在" });
     }
     res.json({ ok: true });
   } catch (e) {
