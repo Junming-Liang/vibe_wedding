@@ -3,119 +3,313 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>请柬留言审核</title>
+    <title>婚礼后台管理</title>
     <style>
       :root {
         font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
         line-height: 1.5;
-        color: #222;
-        background: #faf7f4;
+        color: #2c2220;
+        background:
+          radial-gradient(circle at top right, rgba(196, 30, 58, 0.08), transparent 32%),
+          linear-gradient(180deg, #fdf8f4 0%, #f8f1ea 100%);
+      }
+      * {
+        box-sizing: border-box;
       }
       body {
         margin: 0 auto;
-        max-width: 40rem;
-        padding: 1rem 1rem 2.5rem;
+        max-width: 76rem;
+        padding: 1.2rem 1rem 2.5rem;
       }
       h1 {
-        font-size: 1.1rem;
-        margin: 0 0 0.75rem;
+        font-size: 1.35rem;
+        margin: 0 0 0.45rem;
+        color: #7d1b2d;
+      }
+      .sub {
+        margin: 0 0 0.95rem;
+        color: #6f625d;
+        font-size: 0.92rem;
+      }
+      .admin-link-wrap {
+        margin: 0 0 1rem;
+        font-size: 0.82rem;
+        color: #6f625d;
+      }
+      .admin-link-wrap a {
+        color: #0b5fff;
+        word-break: break-all;
+      }
+      .hint {
+        margin: 0 0 1rem;
+        padding: 0.85rem 0.95rem;
+        border-radius: 0.9rem;
+        font-size: 0.82rem;
+        color: #6f625d;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid rgba(201, 162, 39, 0.22);
+        box-shadow: 0 8px 28px rgba(61, 21, 24, 0.05);
+      }
+      .shell {
+        background: rgba(255, 255, 255, 0.84);
+        border: 1px solid rgba(201, 162, 39, 0.2);
+        box-shadow: 0 18px 44px rgba(61, 21, 24, 0.08);
+        border-radius: 1.15rem;
+        overflow: hidden;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem;
+        border-bottom: 1px solid rgba(201, 162, 39, 0.18);
+        background: linear-gradient(180deg, rgba(255, 248, 245, 0.95), rgba(255, 255, 255, 0.75));
+      }
+      .tabs,
+      .controls,
+      .stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        align-items: center;
+      }
+      .tab {
+        border: 1px solid rgba(196, 30, 58, 0.18);
+        background: rgba(255, 255, 255, 0.72);
+        color: #7d1b2d;
+      }
+      .tab.active {
+        background: linear-gradient(155deg, #d42845 0%, #a8142c 100%);
+        color: #fff;
+        border-color: #a8142c;
+        box-shadow: 0 10px 24px rgba(196, 30, 58, 0.18);
+      }
+      label {
+        font-size: 0.85rem;
+        color: #6f625d;
+      }
+      select,
+      button {
+        font: inherit;
+        min-height: 2.35rem;
+        border-radius: 0.72rem;
+      }
+      select {
+        padding: 0.45rem 0.7rem;
+        border: 1px solid #d9cdc3;
+        min-width: 11rem;
+        background: #fff;
+        color: #2c2220;
+      }
+      button {
+        padding: 0.45rem 0.9rem;
+        border: 1px solid #d6cbc2;
+        background: #fff;
+        cursor: pointer;
+        transition: transform 0.12s ease, box-shadow 0.18s ease;
+      }
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(61, 21, 24, 0.06);
+      }
+      button.primary {
+        background: linear-gradient(155deg, #d42845 0%, #a8142c 100%);
+        color: #fff;
+        border-color: #a8142c;
+      }
+      button.ghost {
+        background: #f5f3f1;
+      }
+      button.btn-danger {
+        color: #9d1c30;
+        border-color: rgba(196, 30, 58, 0.35);
+        background: #fff5f5;
+      }
+      .summary-card {
+        min-width: 8rem;
+        padding: 0.65rem 0.8rem;
+        border-radius: 0.85rem;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid rgba(201, 162, 39, 0.18);
+      }
+      .summary-card strong {
+        display: block;
+        font-size: 1.05rem;
+        color: #7d1b2d;
+      }
+      .summary-card span {
+        font-size: 0.78rem;
+        color: #6f625d;
+      }
+      .panel {
+        padding: 1rem;
+      }
+      .panel[hidden] {
+        display: none;
+      }
+      .err {
+        color: #a8142c;
+        font-size: 0.85rem;
+        margin: 0 0 1rem;
+      }
+      .cards {
+        display: grid;
+        gap: 0.8rem;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #e8dfd8;
+        border-radius: 0.95rem;
+        padding: 0.85rem 0.95rem;
+        box-shadow: 0 8px 24px rgba(61, 21, 24, 0.04);
+      }
+      .meta {
+        font-size: 0.78rem;
+        color: #6f625d;
+        margin-bottom: 0.35rem;
+      }
+      .content {
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #2c2220;
       }
       .row {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
         align-items: center;
-        margin-bottom: 0.75rem;
+        margin-top: 0.7rem;
       }
-      label {
-        font-size: 0.85rem;
-        color: #555;
-      }
-      select {
-        padding: 0.45rem 0.55rem;
-        border-radius: 0.35rem;
-        border: 1px solid #ccc;
-        min-width: 12rem;
-        font: inherit;
-      }
-      button {
-        font: inherit;
-        padding: 0.45rem 0.75rem;
-        border-radius: 0.35rem;
-        border: 1px solid #bbb;
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid #eadfd5;
+        border-radius: 0.95rem;
         background: #fff;
-        cursor: pointer;
       }
-      button.primary {
-        background: #c41e3a;
-        color: #fff;
-        border-color: #a8142c;
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 44rem;
       }
-      button.ghost {
-        background: #f3f3f3;
+      th,
+      td {
+        padding: 0.82rem 0.85rem;
+        border-bottom: 1px solid #f0e7e0;
+        text-align: left;
+        vertical-align: middle;
+        font-size: 0.9rem;
       }
-      button.btn-danger {
-        color: #9d1c30;
-        border-color: rgba(196, 30, 58, 0.45);
-        background: #fff5f5;
+      th {
+        font-size: 0.8rem;
+        color: #7d1b2d;
+        letter-spacing: 0.04em;
+        background: #fff8f5;
+        position: sticky;
+        top: 0;
       }
-      .admin-link-wrap {
-        margin: 0 0 0.75rem;
-        font-size: 0.82rem;
+      td.mono {
+        font-variant-numeric: tabular-nums;
+        font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
       }
-      .admin-link-wrap a {
-        color: #0b5fff;
-        word-break: break-all;
+      .empty {
+        padding: 1.2rem;
+        text-align: center;
+        color: #6f625d;
+        font-size: 0.9rem;
       }
-      .card {
-        background: #fff;
-        border: 1px solid #e6e0d8;
-        border-radius: 0.5rem;
-        padding: 0.75rem 0.85rem;
-        margin-bottom: 0.65rem;
-      }
-      .meta {
-        font-size: 0.75rem;
-        color: #666;
-        margin-bottom: 0.35rem;
-      }
-      .content {
-        white-space: pre-wrap;
-        word-break: break-word;
-      }
-      .err {
-        color: #a8142c;
-        font-size: 0.85rem;
-        margin: 0.25rem 0 0;
-      }
-      .hint {
-        font-size: 0.78rem;
-        color: #666;
-        margin-top: 1rem;
+      @media (max-width: 720px) {
+        body {
+          padding-left: 0.75rem;
+          padding-right: 0.75rem;
+        }
+        .toolbar {
+          align-items: flex-start;
+        }
+        .table-wrap {
+          border-radius: 0.8rem;
+        }
+        table {
+          min-width: 38rem;
+        }
       }
     </style>
   </head>
   <body>
-    <h1>请柬留言审核</h1>
+    <h1>婚礼后台管理</h1>
+    <p class="sub">留言审核与宾客来访统计共用一套页面，便于日常查看、导出和打印。</p>
     <p id="admin-link-wrap" class="admin-link-wrap" hidden>
-      审核页直达（与 <code>GET /api/health</code> 中 <code>adminUrl</code> 一致）：
+      后台地址（与 <code>GET /api/health</code> 中 <code>adminUrl</code> 一致）：
       <a id="admin-link" href="#" target="_blank" rel="noopener noreferrer">加载中…</a>
     </p>
     <p class="hint">
-      本页<strong>仅允许在运行留言服务的服务器本机</strong>打开（服务默认监听 <code>127.0.0.1</code>，不对外网开放）。或 SSH 隧道后在本地浏览器打开。无需密钥。新留言状态为<strong>待审核</strong>，筛选请选「待审核」或「全部」。
+      本页<strong>仅允许在运行服务的服务器本机</strong>打开（默认监听 <code>127.0.0.1</code>）。可通过 SSH
+      隧道在本地浏览器访问。宾客来访统计支持 Excel 导出，打开后可直接打印。
     </p>
-    <div class="row">
-      <label for="status">筛选</label>
-      <select id="status">
-        <option value="pending" selected>待审核</option>
-        <option value="approved">已通过</option>
-        <option value="rejected">已拒绝</option>
-        <option value="all">全部</option>
-      </select>
-      <button type="button" id="load">刷新列表</button>
-    </div>
-    <p id="msg" class="err" hidden></p>
-    <div id="list"></div>
+
+    <section class="shell">
+      <div class="toolbar">
+        <div class="tabs">
+          <button type="button" class="tab active" data-tab="messages">留言审核</button>
+          <button type="button" class="tab" data-tab="visits">来访统计</button>
+        </div>
+
+        <div id="messages-controls" class="controls">
+          <label for="status">筛选</label>
+          <select id="status">
+            <option value="pending" selected>待审核</option>
+            <option value="approved">已通过</option>
+            <option value="rejected">已拒绝</option>
+            <option value="all">全部</option>
+          </select>
+          <button type="button" id="load">刷新列表</button>
+        </div>
+
+        <div id="visits-controls" class="controls" hidden>
+          <button type="button" id="load-visits">刷新统计</button>
+          <button type="button" id="export-visits" class="primary">导出 Excel</button>
+        </div>
+      </div>
+
+      <div id="visit-stats" class="toolbar" hidden>
+        <div class="stats">
+          <div class="summary-card">
+            <strong id="stat-total-guests">0</strong>
+            <span>登记人数</span>
+          </div>
+          <div class="summary-card">
+            <strong id="stat-total-attendees">0</strong>
+            <span>赴宴总人数</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p id="msg" class="err" hidden></p>
+
+        <section id="panel-messages">
+          <div id="list" class="cards"></div>
+        </section>
+
+        <section id="panel-visits" hidden>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>姓名</th>
+                  <th>电话</th>
+                  <th>参加宴席人数</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="visit-table-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
 
     <script>
       (function () {
@@ -124,6 +318,18 @@
         const listEl = document.getElementById("list");
         const msgEl = document.getElementById("msg");
         const loadBtn = document.getElementById("load");
+        const loadVisitsBtn = document.getElementById("load-visits");
+        const exportVisitsBtn = document.getElementById("export-visits");
+        const visitBodyEl = document.getElementById("visit-table-body");
+        const messagesControlsEl = document.getElementById("messages-controls");
+        const visitsControlsEl = document.getElementById("visits-controls");
+        const visitStatsEl = document.getElementById("visit-stats");
+        const messagePanelEl = document.getElementById("panel-messages");
+        const visitPanelEl = document.getElementById("panel-visits");
+        const totalGuestsEl = document.getElementById("stat-total-guests");
+        const totalAttendeesEl = document.getElementById("stat-total-attendees");
+
+        let activeTab = "messages";
 
         function showErr(t) {
           msgEl.textContent = t || "";
@@ -142,6 +348,44 @@
           return res.statusText || String(res.status);
         }
 
+        function escapeHtml(s) {
+          return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        }
+
+        function fmtDate(s) {
+          if (!s) return "";
+          const d = new Date(s);
+          if (Number.isNaN(d.getTime())) return s;
+          const p = (n) => String(n).padStart(2, "0");
+          return (
+            d.getFullYear() +
+            "-" +
+            p(d.getMonth() + 1) +
+            "-" +
+            p(d.getDate()) +
+            " " +
+            p(d.getHours()) +
+            ":" +
+            p(d.getMinutes())
+          );
+        }
+
+        function syncTabUi() {
+          document.querySelectorAll(".tab").forEach((el) => {
+            el.classList.toggle("active", el.getAttribute("data-tab") === activeTab);
+          });
+          const visitTab = activeTab === "visits";
+          messagesControlsEl.hidden = visitTab;
+          visitsControlsEl.hidden = !visitTab;
+          visitStatsEl.hidden = !visitTab;
+          messagePanelEl.hidden = visitTab;
+          visitPanelEl.hidden = !visitTab;
+        }
+
         async function loadHealthAdminLink() {
           const wrap = document.getElementById("admin-link-wrap");
           const a = document.getElementById("admin-link");
@@ -158,7 +402,7 @@
           } catch (_) {}
         }
 
-        async function loadList() {
+        async function loadMessages() {
           showErr("");
           listEl.innerHTML = "";
           const st = statusEl.value;
@@ -176,7 +420,7 @@
           const data = await res.json();
           const items = data.items || [];
           if (!items.length) {
-            listEl.textContent = "暂无数据";
+            listEl.innerHTML = '<div class="empty">暂无数据</div>';
             return;
           }
           for (const m of items) {
@@ -188,7 +432,7 @@
               " · " +
               (m.status || "") +
               " · " +
-              (m.createdAt || "") +
+              fmtDate(m.createdAt || "") +
               (m.clientIp ? " · IP " + escapeHtml(m.clientIp) : "") +
               "</div>" +
               '<div class="meta">署名：' +
@@ -224,14 +468,6 @@
           }
         }
 
-        function escapeHtml(s) {
-          return String(s)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;");
-        }
-
         async function moderate(id, action) {
           showErr("");
           const path = action === "approve" ? "approve" : "reject";
@@ -248,7 +484,7 @@
             showErr("操作失败：" + (await errBody(res)));
             return;
           }
-          await loadList();
+          await loadMessages();
         }
 
         async function removeMsg(id) {
@@ -266,18 +502,127 @@
             showErr("删除失败：" + (await errBody(res)));
             return;
           }
-          await loadList();
+          await loadMessages();
         }
 
-        loadBtn.addEventListener("click", loadList);
+        async function loadVisits() {
+          showErr("");
+          visitBodyEl.innerHTML = "";
+          const res = await fetch(apiBase + "/api/admin/visits", { headers: jsonHeaders() });
+          if (res.status === 403) {
+            showErr(await errBody(res));
+            return;
+          }
+          if (!res.ok) {
+            showErr("加载失败：" + (await errBody(res)));
+            return;
+          }
+          const data = await res.json();
+          const items = data.items || [];
+          const stats = data.stats || {};
+          totalGuestsEl.textContent = String(stats.totalGuests || 0);
+          totalAttendeesEl.textContent = String(stats.totalAttendees || 0);
+
+          if (!items.length) {
+            visitBodyEl.innerHTML = '<tr><td colspan="5" class="empty">暂无登记数据</td></tr>';
+            return;
+          }
+
+          for (const item of items) {
+            const tr = document.createElement("tr");
+            tr.innerHTML =
+              "<td>" +
+              escapeHtml(item.name || "") +
+              "</td>" +
+              '<td class="mono">' +
+              escapeHtml(item.phone || "") +
+              "</td>" +
+              '<td class="mono">' +
+              escapeHtml(item.attendees || 0) +
+              "</td>" +
+              '<td class="mono">' +
+              escapeHtml(fmtDate(item.updatedAt || "")) +
+              "</td>" +
+              "<td></td>";
+            const actionCell = tr.lastElementChild;
+            const del = document.createElement("button");
+            del.className = "btn-danger";
+            del.type = "button";
+            del.textContent = "删除";
+            del.addEventListener("click", () => removeVisit(item.id, item.name));
+            actionCell.appendChild(del);
+            visitBodyEl.appendChild(tr);
+          }
+        }
+
+        async function removeVisit(id, name) {
+          if (!confirm('确定删除登记“' + (name || "#" + id) + "”吗？不可恢复。")) return;
+          showErr("");
+          const res = await fetch(apiBase + "/api/admin/visits/" + id, {
+            method: "DELETE",
+            headers: jsonHeaders(),
+          });
+          if (res.status === 403) {
+            showErr(await errBody(res));
+            return;
+          }
+          if (!res.ok) {
+            showErr("删除失败：" + (await errBody(res)));
+            return;
+          }
+          await loadVisits();
+        }
+
+        async function exportVisits() {
+          showErr("");
+          const res = await fetch(apiBase + "/api/admin/visits/export", { headers: { Accept: "*/*" } });
+          if (res.status === 403) {
+            showErr(await errBody(res));
+            return;
+          }
+          if (!res.ok) {
+            showErr("导出失败：" + (await errBody(res)));
+            return;
+          }
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "wedding-visits.xls";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+        }
+
+        document.querySelectorAll(".tab").forEach((el) => {
+          el.addEventListener("click", async function () {
+            const nextTab = el.getAttribute("data-tab");
+            if (!nextTab || nextTab === activeTab) return;
+            activeTab = nextTab;
+            syncTabUi();
+            if (activeTab === "visits") {
+              await loadVisits();
+              return;
+            }
+            await loadMessages();
+          });
+        });
+
+        loadBtn.addEventListener("click", loadMessages);
+        loadVisitsBtn.addEventListener("click", loadVisits);
+        exportVisitsBtn.addEventListener("click", exportVisits);
+
         if (document.readyState === "loading") {
           document.addEventListener("DOMContentLoaded", function () {
+            syncTabUi();
             loadHealthAdminLink();
-            loadList();
+            loadMessages();
           });
         } else {
+          syncTabUi();
           loadHealthAdminLink();
-          loadList();
+          loadMessages();
         }
       })();
     </script>

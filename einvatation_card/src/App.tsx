@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import weddingPhotoSrc from "./assets/mogo_weding_picture.png";
+import { InvitationResponse } from "./InvitationResponse";
 import { MessageWall } from "./MessageWall";
 import "./App.css";
 
@@ -355,6 +356,7 @@ export default function App() {
           <p>{INVITE.note}</p>
         </section>
 
+        <InvitationResponse />
         <MessageWall />
       </main>
 

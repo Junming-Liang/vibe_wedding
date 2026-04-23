@@ -1,121 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  formatHttpJsonError,
+  inviteApiEndpoint,
+  mapFetchError,
+  parseJsonBody,
+  phpBridgeHref,
+  usePhpBridge,
+} from "./inviteApi";
 
 type PublicMessage = { id: number; author: string; content: string };
 
-/** 与 deploy/invite-2026-messages-bridge.php 文件名一致；部署在 WordPress 站点根，不在 /invite-2026/ 内 */
-const SITE_ROOT_MESSAGE_BRIDGE = "/invite-2026-messages-bridge.php";
-
-/** 留言接口根路径（已含 `/api` 后缀），供直连 Node / Nginx 反代时使用 */
-function messagesApiRoot(): string {
-  const raw = import.meta.env.VITE_MESSAGES_API as string | undefined;
-  if (raw != null && String(raw).trim() !== "") {
-    return String(raw).trim().replace(/\/+$/, "");
-  }
-  const base = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
-  if (!base) return "/api";
-  return `${base}/api`;
-}
-
-/**
- * 生产环境且未配置独立 API 时，默认走站点根 PHP 桥（避免 /invite-2026/ 下 try_files 导致 POST 405）。
- * 设为 `false` 可强制走 /invite-2026/api/（需 Nginx 已反代到 Node）。
- */
-function usePhpBridge(): boolean {
-  if (import.meta.env.VITE_MESSAGES_API?.trim()) return false;
-  const flag = (import.meta.env.VITE_MESSAGES_USE_PHP_BRIDGE as string | undefined)?.trim().toLowerCase();
-  if (flag === "false" || flag === "0" || flag === "off") return false;
-  if (import.meta.env.DEV) return false;
-  if (typeof window === "undefined") return false;
-  const host = window.location.hostname;
-  if (host === "localhost" || host === "127.0.0.1") return false;
-  return true;
-}
-
-function absoluteUrl(path: string): string {
-  if (typeof window === "undefined") return path;
-  try {
-    const p = path.startsWith("/") ? path : `/${path}`;
-    return new URL(p, window.location.origin).href;
-  } catch {
-    return path;
-  }
-}
-
-function phpBridgePublicHref(): string {
-  return `${absoluteUrl(SITE_ROOT_MESSAGE_BRIDGE)}?action=public`;
-}
-
-function phpBridgeSubmitHref(): string {
-  return absoluteUrl(SITE_ROOT_MESSAGE_BRIDGE);
-}
-
-/**
- * 直连 Node 时的路径（与 Vite base 同前缀的 /invite-2026/api/...）。
- */
-function messagesEndpoint(suffix: string): string {
-  const root = messagesApiRoot().replace(/\/+$/, "");
-  const path = `${root}${suffix.startsWith("/") ? suffix : `/${suffix}`}`;
-  if (typeof window === "undefined") return path;
-  try {
-    if (/^https?:\/\//i.test(path)) {
-      return new URL(path).href;
-    }
-    const normalized = path.startsWith("/") ? path : `/${path}`;
-    return new URL(normalized, window.location.origin).href;
-  } catch {
-    return path.startsWith("/") ? path : `/${path}`;
-  }
-}
-
-function mapFetchError(err: unknown): string {
-  if (err instanceof TypeError && /pattern|URL|Failed to fetch/i.test(err.message)) {
-    return "网络或地址异常，请稍后再试（若持续出现请检查接口配置）。";
-  }
-  if (err instanceof Error) return err.message;
-  return "请求失败";
-}
-
-type JsonEnvelope = {
-  items?: PublicMessage[];
-  error?: string;
-  detail?: string;
-  upstream?: string;
-  id?: number;
-  ok?: boolean;
-  honeypot?: boolean;
-};
-
-function parseJsonBody(text: string): JsonEnvelope | null {
-  if (!text.trim()) return null;
-  try {
-    return JSON.parse(text) as JsonEnvelope;
-  } catch {
-    return null;
-  }
-}
-
-function formatHttpJsonError(
-  status: number,
-  p: JsonEnvelope | null,
-  phpBridge: boolean,
-  verb: "加载" | "提交" = "加载",
-): string {
-  if (p?.error) {
-    const bits = [p.error];
-    if (p.upstream) bits.push(`请求地址：${p.upstream}`);
-    if (p.detail) bits.push(`详情：${p.detail}`);
-    if (status === 502 && phpBridge) {
-      bits.push(
-        "请在服务器启动 Node 服务：cd invite_messages_api && npm install && npm run start；或配置 systemd（见 invite_messages_api/README.md）。php-fpm 环境变量 INVITE_MSG_UPSTREAM 须与 Node 监听地址一致（默认 http://127.0.0.1:3840）。",
-      );
-    }
-    return bits.join(" ");
-  }
-  return `${verb}失败 (${status})`;
-}
-
 async function fetchPublic(): Promise<PublicMessage[]> {
-  const url = usePhpBridge() ? phpBridgePublicHref() : messagesEndpoint("/messages/public");
+  const url = usePhpBridge() ? phpBridgeHref("public") : inviteApiEndpoint("/messages/public");
   let res: Response;
   try {
     res = await fetch(url, {
@@ -151,7 +47,7 @@ async function submitMessage(body: {
   content: string;
   _hp: string;
 }): Promise<void> {
-  const url = usePhpBridge() ? phpBridgeSubmitHref() : messagesEndpoint("/messages");
+  const url = usePhpBridge() ? phpBridgeHref("message_submit") : inviteApiEndpoint("/messages");
   let res: Response;
   try {
     res = await fetch(url, {

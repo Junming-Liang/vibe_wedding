@@ -412,6 +412,36 @@
   line-height: 1.6;
 }
 
+.rsvp-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.rsvp-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -2rem -2.25rem auto;
+  width: 8.5rem;
+  height: 8.5rem;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(196, 30, 58, 0.08) 0%, rgba(196, 30, 58, 0) 72%);
+  pointer-events: none;
+}
+
+.rsvp-intro {
+  margin: 0 0 0.85rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.rsvp-form {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
 .message-wall-viewport {
   position: relative;
   border-radius: 0.75rem;
