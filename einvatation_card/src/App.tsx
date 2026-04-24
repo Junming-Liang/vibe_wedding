@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import weddingPhotoSrc from "./assets/mogo_weding_picture.png";
+import floralCornerSrc from "./assets/generated/wedding-floral-corner.png";
+import floralRibbonSrc from "./assets/generated/wedding-floral-ribbon.png";
+import goldVineDividerSrc from "./assets/generated/wedding-gold-vine-divider.png";
+import infoBadgesSrc from "./assets/generated/wedding-info-badges.png";
+import petalsSrc from "./assets/generated/wedding-petals.png";
+import sealDividerSrc from "./assets/generated/wedding-seal-divider.png";
+import tasselsSrc from "./assets/generated/wedding-tassels.png";
 import { InvitationResponse } from "./InvitationResponse";
 import { MessageWall } from "./MessageWall";
 import "./App.css";
@@ -251,89 +258,150 @@ export default function App() {
       </button>
 
       <header className="hero" aria-label="封面">
-        <p className="eyebrow">Wedding Invitation</p>
-        <h1 className="title title--couple">
-          <span className="name">{INVITE.groom}</span>
-          <span className="name-join" aria-hidden="true">
-            &
-          </span>
-          <span className="name">{INVITE.bride}</span>
-        </h1>
-        <p className="lead">{INVITE.subtitle}</p>
-        <div
-          className="countdown-bar"
-          role="timer"
-          aria-label={
-            countdown
-              ? `距开席还有 ${countdown.days} 天 ${countdown.hours} 小时 ${countdown.minutes} 分 ${countdown.seconds} 秒`
-              : "良辰已到"
-          }
-        >
-          {countdown ? (
-            <>
-              <span className="countdown-bar__label">距开席</span>
-              <span className="countdown-bar__sep" aria-hidden="true">
-                ·
-              </span>
-              <span className="countdown-bar__vals">
-                <span className="countdown-pair">
-                  <span className="countdown-pair__num">{countdown.days}</span>
-                  <span className="countdown-pair__unit">天</span>
+        <div className="hero-card">
+          <img className="hero-ornament hero-ornament--floral" src={floralRibbonSrc} alt="" />
+          <img className="hero-ornament hero-ornament--petals" src={petalsSrc} alt="" />
+          <img className="hero-ornament hero-ornament--tassels" src={tasselsSrc} alt="" />
+          <p className="eyebrow">Wedding Invitation</p>
+          <img className="hero-seal-divider" src={goldVineDividerSrc} alt="" />
+          <h1 className="title title--couple">
+            <span className="name">{INVITE.groom}</span>
+            <span className="name-join" aria-hidden="true">
+              &
+            </span>
+            <span className="name">{INVITE.bride}</span>
+          </h1>
+          <p className="lead">{INVITE.subtitle}</p>
+          <p className="hero-poem">山河远阔，人间烟火，今日与君共赴一场长久的欢喜。</p>
+          <div className="hero-meta" aria-label="婚礼概览">
+            <span>{INVITE.dateLine}</span>
+            <span>{INVITE.timeLine}</span>
+            <span>{INVITE.venueName}</span>
+          </div>
+          <div
+            className="countdown-bar"
+            role="timer"
+            aria-label={
+              countdown
+                ? `距开席还有 ${countdown.days} 天 ${countdown.hours} 小时 ${countdown.minutes} 分 ${countdown.seconds} 秒`
+                : "良辰已到"
+            }
+          >
+            {countdown ? (
+              <>
+                <span className="countdown-bar__label">距开席</span>
+                <span className="countdown-bar__sep" aria-hidden="true">
+                  ·
                 </span>
-                <span className="countdown-pair">
-                  <span className="countdown-pair__num">{pad2(countdown.hours)}</span>
-                  <span className="countdown-pair__unit">时</span>
+                <span className="countdown-bar__vals">
+                  <span className="countdown-pair">
+                    <span className="countdown-pair__num">{countdown.days}</span>
+                    <span className="countdown-pair__unit">天</span>
+                  </span>
+                  <span className="countdown-pair">
+                    <span className="countdown-pair__num">{pad2(countdown.hours)}</span>
+                    <span className="countdown-pair__unit">时</span>
+                  </span>
+                  <span className="countdown-pair">
+                    <span className="countdown-pair__num">{pad2(countdown.minutes)}</span>
+                    <span className="countdown-pair__unit">分</span>
+                  </span>
+                  <span className="countdown-pair">
+                    <span className="countdown-pair__num">{pad2(countdown.seconds)}</span>
+                    <span className="countdown-pair__unit">秒</span>
+                  </span>
                 </span>
-                <span className="countdown-pair">
-                  <span className="countdown-pair__num">{pad2(countdown.minutes)}</span>
-                  <span className="countdown-pair__unit">分</span>
-                </span>
-                <span className="countdown-pair">
-                  <span className="countdown-pair__num">{pad2(countdown.seconds)}</span>
-                  <span className="countdown-pair__unit">秒</span>
-                </span>
-              </span>
-            </>
-          ) : (
-            <span className="countdown-bar__done">良辰已到，盼与您相逢</span>
-          )}
+              </>
+            ) : (
+              <span className="countdown-bar__done">良辰已到，盼与您相逢</span>
+            )}
+          </div>
+          {bgmError ? <p className="bgm-error">{bgmError}</p> : null}
         </div>
-        {bgmError ? <p className="bgm-error">{bgmError}</p> : null}
       </header>
 
       <main className="sections">
-        <section className="card photo-card" aria-labelledby="photo-heading">
-          <h2 id="photo-heading" className="card-title">
-            结婚照
-          </h2>
-          <figure className="wedding-photo-wrap">
-            <img
-              className="wedding-photo"
-              src={weddingPhotoSrc}
-              width={1024}
-              height={1024}
-              alt={`${INVITE.groom}与${INVITE.bride}的结婚照`}
-              loading="lazy"
-              decoding="async"
-            />
-            <figcaption className="wedding-photo-caption">囍 · 留作纪念</figcaption>
-          </figure>
+        <section className="card feature-card photo-card" aria-labelledby="photo-heading">
+          <img className="card-ornament card-ornament--photo" src={floralRibbonSrc} alt="" />
+          <div className="section-heading">
+            <span>01</span>
+            <div>
+              <h2 id="photo-heading" className="card-title">
+                结婚照
+              </h2>
+              <p className="section-subtitle">The Memory</p>
+            </div>
+          </div>
+          <div className="photo-album">
+            <span className="photo-album__tape photo-album__tape--left" aria-hidden="true" />
+            <span className="photo-album__tape photo-album__tape--right" aria-hidden="true" />
+            <figure className="wedding-photo-wrap">
+              <img
+                className="wedding-photo"
+                src={weddingPhotoSrc}
+                width={1024}
+                height={1024}
+                alt={`${INVITE.groom}与${INVITE.bride}的结婚照`}
+                loading="lazy"
+                decoding="async"
+              />
+              <figcaption className="wedding-photo-caption">
+                <span>我们的合影</span>
+                <span>{INVITE.groom} · {INVITE.bride}</span>
+              </figcaption>
+            </figure>
+            <div className="photo-album__note" aria-hidden="true">
+              <span>LOVE STORY</span>
+              <strong>囍</strong>
+            </div>
+          </div>
         </section>
 
-        <section className="card" aria-labelledby="when-heading">
-          <h2 id="when-heading" className="card-title">
-            良辰
-          </h2>
-          <p className="card-line accent">{INVITE.dateLine}</p>
-          <p className="card-line">{INVITE.timeLine}</p>
+        <section className="card feature-card event-card" aria-labelledby="when-heading">
+          <img className="card-divider-art" src={goldVineDividerSrc} alt="" />
+          <img className="card-info-badges card-info-badges--event" src={infoBadgesSrc} alt="" />
+          <div className="section-heading">
+            <span>02</span>
+            <div>
+              <h2 id="when-heading" className="card-title">
+                婚礼日程
+              </h2>
+              <p className="section-subtitle">Wedding Schedule</p>
+            </div>
+          </div>
+          <div className="event-grid">
+            <div className="event-tile">
+              <span className="event-tile__label">良辰</span>
+              <p>{INVITE.dateLine}</p>
+            </div>
+            <div className="event-tile">
+              <span className="event-tile__label">开席</span>
+              <p>{INVITE.timeLine}</p>
+            </div>
+          </div>
         </section>
 
-        <section className="card" aria-labelledby="where-heading">
-          <h2 id="where-heading" className="card-title">
-            地点
-          </h2>
-          <p className="card-line accent">{INVITE.venueName}</p>
-          <p className="card-line muted">{INVITE.addressFull}</p>
+        <section className="card feature-card location-card" aria-labelledby="where-heading">
+          <img className="card-ornament card-ornament--where" src={petalsSrc} alt="" />
+          <img className="card-info-badges card-info-badges--where" src={infoBadgesSrc} alt="" />
+          <div className="section-heading">
+            <span>03</span>
+            <div>
+              <h2 id="where-heading" className="card-title">
+                宴会地点
+              </h2>
+              <p className="section-subtitle">Banquet Venue</p>
+            </div>
+          </div>
+          <div className="location-panel">
+            <span className="location-panel__pin" aria-hidden="true">
+              ⌖
+            </span>
+            <div>
+              <p className="card-line accent">{INVITE.venueName}</p>
+              <p className="card-line muted">{INVITE.addressFull}</p>
+            </div>
+          </div>
           <div className="nav-actions">
             <div className="nav-row">
               <a className="map-link" href={MAP_GAODE} rel="noopener">
