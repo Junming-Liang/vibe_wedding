@@ -1,11 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useCallback, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   formatHttpJsonError,
-  inviteApiEndpoint,
+  inviteActionEndpoint,
   mapFetchError,
-  parseJsonBody,
-  phpBridgeHref,
-  usePhpBridge,
+  requestJsonEnvelope,
 } from "./inviteApi";
 
 type VisitForm = {
@@ -14,31 +12,30 @@ type VisitForm = {
   attendees: string;
 };
 
-async function submitVisit(body: { name: string; phone: string; attendees: number }): Promise<void> {
-  const phpBridge = usePhpBridge();
-  const url = phpBridge ? phpBridgeHref("visit_submit") : inviteApiEndpoint("/visits");
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch (e) {
-    throw new Error(mapFetchError(e));
-  }
+const INITIAL_VISIT_FORM: VisitForm = { name: "", phone: "", attendees: "1" };
 
-  const text = await res.text();
-  const parsed = parseJsonBody(text);
-  if (!res.ok) {
-    if (res.status === 405) {
+async function submitVisit(body: { name: string; phone: string; attendees: number }): Promise<void> {
+  const { url, phpBridge } = inviteActionEndpoint("visitSubmit");
+  const { response, payload } = await requestJsonEnvelope(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    if (response.status === 405) {
       throw new Error(
         phpBridge
           ? "登记失败 (405)：站点根 PHP 桥可能未部署或未被 PHP-FPM 执行。"
           : "登记失败 (405)：POST 未到达登记服务。请将 Nginx 配置 /invite-2026/api/ 反代到 Node，或按 README 部署站点根 PHP 桥。",
       );
     }
-    throw new Error(formatHttpJsonError(res.status, parsed, phpBridge, "提交"));
+    if (response.status === 404 && payload?.error === "Not found") {
+      throw new Error(
+        "登记接口返回 404：服务器上的留言 API（invite_messages_api）版本过旧或未重启，尚不支持赴宴人数登记。请在部署机拉取最新代码后执行 npm install（必要时 npm rebuild）、再 systemctl restart 对应服务，并确认已部署含 visit_submit 的站点根 PHP 桥。",
+      );
+    }
+    throw new Error(formatHttpJsonError(response.status, payload, phpBridge, "提交"));
   }
 }
 
@@ -47,12 +44,24 @@ function normalizePhoneInput(raw: string): string {
 }
 
 export function InvitationResponse() {
-  const [form, setForm] = useState<VisitForm>({ name: "", phone: "", attendees: "1" });
+  const [form, setForm] = useState<VisitForm>(INITIAL_VISIT_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [submitOk, setSubmitOk] = useState("");
   const [submitErr, setSubmitErr] = useState("");
 
-  const onSubmit = async (e: FormEvent) => {
+  const onNameChange = useCallback((ev: ChangeEvent<HTMLInputElement>) => {
+    setForm((prev) => ({ ...prev, name: ev.target.value }));
+  }, []);
+
+  const onPhoneChange = useCallback((ev: ChangeEvent<HTMLInputElement>) => {
+    setForm((prev) => ({ ...prev, phone: normalizePhoneInput(ev.target.value) }));
+  }, []);
+
+  const onAttendeesChange = useCallback((ev: ChangeEvent<HTMLInputElement>) => {
+    setForm((prev) => ({ ...prev, attendees: ev.target.value }));
+  }, []);
+
+  const onSubmit = useCallback(async (e: FormEvent) => {
     e.preventDefault();
     setSubmitOk("");
     setSubmitErr("");
@@ -77,14 +86,14 @@ export function InvitationResponse() {
     setSubmitting(true);
     try {
       await submitVisit({ name: name.slice(0, 24), phone, attendees });
-      setForm({ name: "", phone: "", attendees: "1" });
+      setForm(INITIAL_VISIT_FORM);
       setSubmitOk("已登记成功。如人数或联系方式有变化，可用同手机号再次提交覆盖更新。");
     } catch (err) {
       setSubmitErr(mapFetchError(err));
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [form.attendees, form.name, form.phone]);
 
   return (
     <section className="card rsvp-card" aria-labelledby="rsvp-heading">
@@ -105,7 +114,7 @@ export function InvitationResponse() {
           className="message-wall-input"
           maxLength={24}
           value={form.name}
-          onChange={(ev) => setForm((prev) => ({ ...prev, name: ev.target.value }))}
+          onChange={onNameChange}
           placeholder="如：张三"
           autoComplete="name"
         />
@@ -119,9 +128,7 @@ export function InvitationResponse() {
           className="message-wall-input"
           maxLength={24}
           value={form.phone}
-          onChange={(ev) =>
-            setForm((prev) => ({ ...prev, phone: normalizePhoneInput(ev.target.value) }))
-          }
+          onChange={onPhoneChange}
           placeholder="如：13800138000"
           autoComplete="tel"
           inputMode="tel"
@@ -138,7 +145,7 @@ export function InvitationResponse() {
           max={20}
           step={1}
           value={form.attendees}
-          onChange={(ev) => setForm((prev) => ({ ...prev, attendees: ev.target.value }))}
+          onChange={onAttendeesChange}
           placeholder="1"
           inputMode="numeric"
         />
