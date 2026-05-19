@@ -313,7 +313,8 @@
 
     <script>
       (function () {
-        const apiBase = "";
+        const API_BASE = "";
+        const JSON_HEADERS = { Accept: "application/json", "Content-Type": "application/json" };
         const statusEl = document.getElementById("status");
         const listEl = document.getElementById("list");
         const msgEl = document.getElementById("msg");
@@ -334,10 +335,6 @@
         function showErr(t) {
           msgEl.textContent = t || "";
           msgEl.hidden = !t;
-        }
-
-        function jsonHeaders() {
-          return { Accept: "application/json", "Content-Type": "application/json" };
         }
 
         async function errBody(res) {
@@ -390,7 +387,7 @@
           const wrap = document.getElementById("admin-link-wrap");
           const a = document.getElementById("admin-link");
           try {
-            const res = await fetch(apiBase + "/api/health");
+            const res = await fetch(API_BASE + "/api/health");
             if (!res.ok) return;
             const j = await res.json();
             const u = (j && (j.adminUrl || j.admin)) || "";
@@ -404,10 +401,10 @@
 
         async function loadMessages() {
           showErr("");
-          listEl.innerHTML = "";
+          listEl.textContent = "";
           const st = statusEl.value;
-          const res = await fetch(apiBase + "/api/admin/messages?status=" + encodeURIComponent(st), {
-            headers: jsonHeaders(),
+          const res = await fetch(API_BASE + "/api/admin/messages?status=" + encodeURIComponent(st), {
+            headers: JSON_HEADERS,
           });
           if (res.status === 403) {
             showErr(await errBody(res));
@@ -423,6 +420,7 @@
             listEl.innerHTML = '<div class="empty">暂无数据</div>';
             return;
           }
+          const fragment = document.createDocumentFragment();
           for (const m of items) {
             const div = document.createElement("div");
             div.className = "card";
@@ -464,16 +462,17 @@
             del.addEventListener("click", () => removeMsg(m.id));
             row.appendChild(del);
             div.appendChild(row);
-            listEl.appendChild(div);
+            fragment.appendChild(div);
           }
+          listEl.appendChild(fragment);
         }
 
         async function moderate(id, action) {
           showErr("");
           const path = action === "approve" ? "approve" : "reject";
-          const res = await fetch(apiBase + "/api/admin/messages/" + id + "/" + path, {
+          const res = await fetch(API_BASE + "/api/admin/messages/" + id + "/" + path, {
             method: "POST",
-            headers: jsonHeaders(),
+            headers: JSON_HEADERS,
             body: "{}",
           });
           if (res.status === 403) {
@@ -490,9 +489,9 @@
         async function removeMsg(id) {
           if (!confirm("确定删除留言 #" + id + "？不可恢复。")) return;
           showErr("");
-          const res = await fetch(apiBase + "/api/admin/messages/" + id, {
+          const res = await fetch(API_BASE + "/api/admin/messages/" + id, {
             method: "DELETE",
-            headers: jsonHeaders(),
+            headers: JSON_HEADERS,
           });
           if (res.status === 403) {
             showErr(await errBody(res));
@@ -507,8 +506,8 @@
 
         async function loadVisits() {
           showErr("");
-          visitBodyEl.innerHTML = "";
-          const res = await fetch(apiBase + "/api/admin/visits", { headers: jsonHeaders() });
+          visitBodyEl.textContent = "";
+          const res = await fetch(API_BASE + "/api/admin/visits", { headers: JSON_HEADERS });
           if (res.status === 403) {
             showErr(await errBody(res));
             return;
@@ -528,6 +527,7 @@
             return;
           }
 
+          const fragment = document.createDocumentFragment();
           for (const item of items) {
             const tr = document.createElement("tr");
             tr.innerHTML =
@@ -551,16 +551,17 @@
             del.textContent = "删除";
             del.addEventListener("click", () => removeVisit(item.id, item.name));
             actionCell.appendChild(del);
-            visitBodyEl.appendChild(tr);
+            fragment.appendChild(tr);
           }
+          visitBodyEl.appendChild(fragment);
         }
 
         async function removeVisit(id, name) {
           if (!confirm('确定删除登记“' + (name || "#" + id) + "”吗？不可恢复。")) return;
           showErr("");
-          const res = await fetch(apiBase + "/api/admin/visits/" + id, {
+          const res = await fetch(API_BASE + "/api/admin/visits/" + id, {
             method: "DELETE",
-            headers: jsonHeaders(),
+            headers: JSON_HEADERS,
           });
           if (res.status === 403) {
             showErr(await errBody(res));
@@ -575,7 +576,7 @@
 
         async function exportVisits() {
           showErr("");
-          const res = await fetch(apiBase + "/api/admin/visits/export", { headers: { Accept: "*/*" } });
+          const res = await fetch(API_BASE + "/api/admin/visits/export", { headers: { Accept: "*/*" } });
           if (res.status === 403) {
             showErr(await errBody(res));
             return;

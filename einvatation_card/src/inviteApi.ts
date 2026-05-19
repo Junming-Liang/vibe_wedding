@@ -1,6 +1,6 @@
 const SITE_ROOT_MESSAGE_BRIDGE = "/invite-2026-messages-bridge.php";
 
-type JsonEnvelope = {
+export type JsonEnvelope = {
   items?: unknown[];
   error?: string;
   detail?: string;
@@ -8,6 +8,26 @@ type JsonEnvelope = {
   id?: number;
   ok?: boolean;
   honeypot?: boolean;
+};
+
+type InviteApiAction = "public" | "messageSubmit" | "visitSubmit";
+
+type ParsedJsonResponse = {
+  response: Response;
+  payload: JsonEnvelope | null;
+  contentType: string;
+};
+
+const PHP_ACTION_BY_API_ACTION: Record<InviteApiAction, string> = {
+  public: "public",
+  messageSubmit: "message_submit",
+  visitSubmit: "visit_submit",
+};
+
+const NODE_PATH_BY_API_ACTION: Record<InviteApiAction, string> = {
+  public: "/messages/public",
+  messageSubmit: "/messages",
+  visitSubmit: "/visits",
 };
 
 /** 留言/登记接口根路径（已含 `/api` 后缀），供直连 Node / Nginx 反代时使用 */
@@ -52,6 +72,16 @@ export function phpBridgeHref(action?: string): string {
   return `${url}?action=${encodeURIComponent(action)}`;
 }
 
+export function inviteActionEndpoint(action: InviteApiAction): { url: string; phpBridge: boolean } {
+  const phpBridge = usePhpBridge();
+  return {
+    phpBridge,
+    url: phpBridge
+      ? phpBridgeHref(PHP_ACTION_BY_API_ACTION[action])
+      : inviteApiEndpoint(NODE_PATH_BY_API_ACTION[action]),
+  };
+}
+
 export function inviteApiEndpoint(suffix: string): string {
   const root = inviteApiRoot().replace(/\/+$/, "");
   const path = `${root}${suffix.startsWith("/") ? suffix : `/${suffix}`}`;
@@ -82,6 +112,22 @@ export function parseJsonBody(text: string): JsonEnvelope | null {
   } catch {
     return null;
   }
+}
+
+export async function requestJsonEnvelope(url: string, init: RequestInit): Promise<ParsedJsonResponse> {
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch (e) {
+    throw new Error(mapFetchError(e));
+  }
+
+  const text = await response.text();
+  return {
+    response,
+    payload: parseJsonBody(text),
+    contentType: response.headers.get("content-type") || "",
+  };
 }
 
 export function formatHttpJsonError(

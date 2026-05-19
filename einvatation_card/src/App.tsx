@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import weddingPhotoSrc from "./assets/mogo_weding_picture.png";
-import floralCornerSrc from "./assets/generated/wedding-floral-corner.png";
 import floralRibbonSrc from "./assets/generated/wedding-floral-ribbon.png";
 import goldVineDividerSrc from "./assets/generated/wedding-gold-vine-divider.png";
 import infoBadgesSrc from "./assets/generated/wedding-info-badges.png";
 import petalsSrc from "./assets/generated/wedding-petals.png";
-import sealDividerSrc from "./assets/generated/wedding-seal-divider.png";
 import tasselsSrc from "./assets/generated/wedding-tassels.png";
 import { InvitationResponse } from "./InvitationResponse";
 import { MessageWall } from "./MessageWall";
@@ -27,6 +25,10 @@ const INVITE = {
 
 type CountdownParts = { days: number; hours: number; minutes: number; seconds: number };
 
+const EVENT_AT_MS = new Date(INVITE.eventAt).getTime();
+const COPY_FEEDBACK_MS = 2000;
+const WECHAT_BRIDGE_RETRY_MS = 520;
+
 function parseCountdown(targetMs: number, nowMs: number): CountdownParts | null {
   const diff = targetMs - nowMs;
   if (diff <= 0) return null;
@@ -41,6 +43,11 @@ function parseCountdown(targetMs: number, nowMs: number): CountdownParts | null 
 
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
+}
+
+function countdownAriaLabel(countdown: CountdownParts | null): string {
+  if (!countdown) return "良辰已到";
+  return `距开席还有 ${countdown.days} 天 ${countdown.hours} 小时 ${countdown.minutes} 分 ${countdown.seconds} 秒`;
 }
 
 /** 仓库主页（请柬页底开源说明用） */
@@ -61,6 +68,21 @@ type WxBridge = { invoke: (api: string, data: object, cb: () => void) => void };
 
 function getWeixinJSBridge(): WxBridge | undefined {
   return (window as unknown as { WeixinJSBridge?: WxBridge }).WeixinJSBridge;
+}
+
+function mediaErrorMessage(error: MediaError | null): string {
+  switch (error?.code) {
+    case 1:
+      return "播放被中止";
+    case 2:
+      return "网络错误";
+    case 3:
+      return "音频解码失败";
+    case 4:
+      return "音频资源不可用";
+    default:
+      return "音频加载失败";
+  }
 }
 
 /** 微信内走 JSBridge；500ms 超时兜底必调用一次 play，避免回调不触发 */
@@ -112,9 +134,61 @@ function playAudioRobust(a: HTMLAudioElement): Promise<void> {
         if (!settled) {
           finish(tryPlay());
         }
-      }, 520);
+      }, WECHAT_BRIDGE_RETRY_MS);
     });
   });
+}
+
+function BgmIcon({ playing }: { playing: boolean }) {
+  if (playing) {
+    return (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <rect x="3" y="3" width="3.5" height="10" rx="1" />
+        <rect x="9.5" y="3" width="3.5" height="10" rx="1" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M4 2.5L13 8 4 13.5z" />
+    </svg>
+  );
+}
+
+function CountdownBar({ countdown }: { countdown: CountdownParts | null }) {
+  return (
+    <div className="countdown-bar" role="timer" aria-label={countdownAriaLabel(countdown)}>
+      {countdown ? (
+        <>
+          <span className="countdown-bar__label">距开席</span>
+          <span className="countdown-bar__sep" aria-hidden="true">
+            ·
+          </span>
+          <span className="countdown-bar__vals">
+            <span className="countdown-pair">
+              <span className="countdown-pair__num">{countdown.days}</span>
+              <span className="countdown-pair__unit">天</span>
+            </span>
+            <span className="countdown-pair">
+              <span className="countdown-pair__num">{pad2(countdown.hours)}</span>
+              <span className="countdown-pair__unit">时</span>
+            </span>
+            <span className="countdown-pair">
+              <span className="countdown-pair__num">{pad2(countdown.minutes)}</span>
+              <span className="countdown-pair__unit">分</span>
+            </span>
+            <span className="countdown-pair">
+              <span className="countdown-pair__num">{pad2(countdown.seconds)}</span>
+              <span className="countdown-pair__unit">秒</span>
+            </span>
+          </span>
+        </>
+      ) : (
+        <span className="countdown-bar__done">良辰已到，盼与您相逢</span>
+      )}
+    </div>
+  );
 }
 
 export default function App() {
@@ -122,18 +196,18 @@ export default function App() {
   const [bgmOn, setBgmOn] = useState(false);
   const [bgmError, setBgmError] = useState("");
   const [countdown, setCountdown] = useState<CountdownParts | null>(() => {
-    const t = new Date(INVITE.eventAt).getTime();
-    return Number.isFinite(t) ? parseCountdown(t, Date.now()) : null;
+    return Number.isFinite(EVENT_AT_MS) ? parseCountdown(EVENT_AT_MS, Date.now()) : null;
   });
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const copyResetTimer = useRef<number | null>(null);
+  const bgmButtonLabel = bgmOn ? "暂停背景音乐" : "播放背景音乐";
 
   useEffect(() => {
-    const targetMs = new Date(INVITE.eventAt).getTime();
-    if (!Number.isFinite(targetMs)) {
+    if (!Number.isFinite(EVENT_AT_MS)) {
       setCountdown(null);
       return;
     }
-    const tick = () => setCountdown(parseCountdown(targetMs, Date.now()));
+    const tick = () => setCountdown(parseCountdown(EVENT_AT_MS, Date.now()));
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
@@ -149,19 +223,7 @@ export default function App() {
     a.muted = false;
     const sync = () => setBgmOn(!a.paused);
     const onError = () => {
-      const mediaError = a.error;
-      const code = mediaError?.code;
-      const detail =
-        code === 1
-          ? "播放被中止"
-          : code === 2
-            ? "网络错误"
-            : code === 3
-              ? "音频解码失败"
-              : code === 4
-                ? "音频资源不可用"
-                : "音频加载失败";
-      setBgmError(`背景音乐播放失败：${detail}`);
+      setBgmError(`背景音乐播放失败：${mediaErrorMessage(a.error)}`);
       setBgmOn(false);
     };
     a.addEventListener("play", sync);
@@ -172,6 +234,25 @@ export default function App() {
       a.removeEventListener("pause", sync);
       a.removeEventListener("error", onError);
     };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimer.current !== null) {
+        window.clearTimeout(copyResetTimer.current);
+      }
+    };
+  }, []);
+
+  const showCopiedFeedback = useCallback(() => {
+    if (copyResetTimer.current !== null) {
+      window.clearTimeout(copyResetTimer.current);
+    }
+    setCopied(true);
+    copyResetTimer.current = window.setTimeout(() => {
+      setCopied(false);
+      copyResetTimer.current = null;
+    }, COPY_FEEDBACK_MS);
   }, []);
 
   const toggleBgm = useCallback(() => {
@@ -203,8 +284,7 @@ export default function App() {
     const text = INVITE.addressFull;
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      showCopiedFeedback();
     } catch {
       try {
         const ta = document.createElement("textarea");
@@ -215,13 +295,12 @@ export default function App() {
         ta.select();
         document.execCommand("copy");
         document.body.removeChild(ta);
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 2000);
+        showCopiedFeedback();
       } catch {
         window.prompt("请长按复制地址：", text);
       }
     }
-  }, []);
+  }, [showCopiedFeedback]);
 
   return (
     <div className="page">
@@ -240,19 +319,10 @@ export default function App() {
         className={`bgm-fab ${bgmOn ? "bgm-fab--on" : ""}`}
         onClick={toggleBgm}
         aria-pressed={bgmOn}
-        aria-label={bgmOn ? "暂停背景音乐" : "播放背景音乐"}
+        aria-label={bgmButtonLabel}
       >
         <span className="bgm-fab__glyph" aria-hidden="true">
-          {bgmOn ? (
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <rect x="3" y="3" width="3.5" height="10" rx="1" />
-              <rect x="9.5" y="3" width="3.5" height="10" rx="1" />
-            </svg>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M4 2.5L13 8 4 13.5z" />
-            </svg>
-          )}
+          <BgmIcon playing={bgmOn} />
         </span>
         <span className="bgm-fab__label">{bgmOn ? "暂停" : "音乐"}</span>
       </button>
@@ -278,44 +348,7 @@ export default function App() {
             <span>{INVITE.timeLine}</span>
             <span>{INVITE.venueName}</span>
           </div>
-          <div
-            className="countdown-bar"
-            role="timer"
-            aria-label={
-              countdown
-                ? `距开席还有 ${countdown.days} 天 ${countdown.hours} 小时 ${countdown.minutes} 分 ${countdown.seconds} 秒`
-                : "良辰已到"
-            }
-          >
-            {countdown ? (
-              <>
-                <span className="countdown-bar__label">距开席</span>
-                <span className="countdown-bar__sep" aria-hidden="true">
-                  ·
-                </span>
-                <span className="countdown-bar__vals">
-                  <span className="countdown-pair">
-                    <span className="countdown-pair__num">{countdown.days}</span>
-                    <span className="countdown-pair__unit">天</span>
-                  </span>
-                  <span className="countdown-pair">
-                    <span className="countdown-pair__num">{pad2(countdown.hours)}</span>
-                    <span className="countdown-pair__unit">时</span>
-                  </span>
-                  <span className="countdown-pair">
-                    <span className="countdown-pair__num">{pad2(countdown.minutes)}</span>
-                    <span className="countdown-pair__unit">分</span>
-                  </span>
-                  <span className="countdown-pair">
-                    <span className="countdown-pair__num">{pad2(countdown.seconds)}</span>
-                    <span className="countdown-pair__unit">秒</span>
-                  </span>
-                </span>
-              </>
-            ) : (
-              <span className="countdown-bar__done">良辰已到，盼与您相逢</span>
-            )}
-          </div>
+          <CountdownBar countdown={countdown} />
           {bgmError ? <p className="bgm-error">{bgmError}</p> : null}
         </div>
       </header>
