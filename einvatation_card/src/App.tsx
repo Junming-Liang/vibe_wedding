@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import weddingPhotoSrc from "./assets/mogo_weding_picture.png";
+import floralRibbonSrc from "./assets/generated/wedding-floral-ribbon.png";
+import goldVineDividerSrc from "./assets/generated/wedding-gold-vine-divider.png";
+import infoBadgesSrc from "./assets/generated/wedding-info-badges.png";
+import petalsSrc from "./assets/generated/wedding-petals.png";
+import tasselsSrc from "./assets/generated/wedding-tassels.png";
 import { InvitationResponse } from "./InvitationResponse";
 import { MessageWall } from "./MessageWall";
 import "./App.css";
@@ -20,6 +25,10 @@ const INVITE = {
 
 type CountdownParts = { days: number; hours: number; minutes: number; seconds: number };
 
+const EVENT_AT_MS = new Date(INVITE.eventAt).getTime();
+const COPY_FEEDBACK_MS = 2000;
+const WECHAT_BRIDGE_RETRY_MS = 520;
+
 function parseCountdown(targetMs: number, nowMs: number): CountdownParts | null {
   const diff = targetMs - nowMs;
   if (diff <= 0) return null;
@@ -34,6 +43,11 @@ function parseCountdown(targetMs: number, nowMs: number): CountdownParts | null 
 
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
+}
+
+function countdownAriaLabel(countdown: CountdownParts | null): string {
+  if (!countdown) return "良辰已到";
+  return `距开席还有 ${countdown.days} 天 ${countdown.hours} 小时 ${countdown.minutes} 分 ${countdown.seconds} 秒`;
 }
 
 /** 仓库主页（请柬页底开源说明用） */
@@ -54,6 +68,21 @@ type WxBridge = { invoke: (api: string, data: object, cb: () => void) => void };
 
 function getWeixinJSBridge(): WxBridge | undefined {
   return (window as unknown as { WeixinJSBridge?: WxBridge }).WeixinJSBridge;
+}
+
+function mediaErrorMessage(error: MediaError | null): string {
+  switch (error?.code) {
+    case 1:
+      return "播放被中止";
+    case 2:
+      return "网络错误";
+    case 3:
+      return "音频解码失败";
+    case 4:
+      return "音频资源不可用";
+    default:
+      return "音频加载失败";
+  }
 }
 
 /** 微信内走 JSBridge；500ms 超时兜底必调用一次 play，避免回调不触发 */
@@ -105,9 +134,61 @@ function playAudioRobust(a: HTMLAudioElement): Promise<void> {
         if (!settled) {
           finish(tryPlay());
         }
-      }, 520);
+      }, WECHAT_BRIDGE_RETRY_MS);
     });
   });
+}
+
+function BgmIcon({ playing }: { playing: boolean }) {
+  if (playing) {
+    return (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <rect x="3" y="3" width="3.5" height="10" rx="1" />
+        <rect x="9.5" y="3" width="3.5" height="10" rx="1" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M4 2.5L13 8 4 13.5z" />
+    </svg>
+  );
+}
+
+function CountdownBar({ countdown }: { countdown: CountdownParts | null }) {
+  return (
+    <div className="countdown-bar" role="timer" aria-label={countdownAriaLabel(countdown)}>
+      {countdown ? (
+        <>
+          <span className="countdown-bar__label">距开席</span>
+          <span className="countdown-bar__sep" aria-hidden="true">
+            ·
+          </span>
+          <span className="countdown-bar__vals">
+            <span className="countdown-pair">
+              <span className="countdown-pair__num">{countdown.days}</span>
+              <span className="countdown-pair__unit">天</span>
+            </span>
+            <span className="countdown-pair">
+              <span className="countdown-pair__num">{pad2(countdown.hours)}</span>
+              <span className="countdown-pair__unit">时</span>
+            </span>
+            <span className="countdown-pair">
+              <span className="countdown-pair__num">{pad2(countdown.minutes)}</span>
+              <span className="countdown-pair__unit">分</span>
+            </span>
+            <span className="countdown-pair">
+              <span className="countdown-pair__num">{pad2(countdown.seconds)}</span>
+              <span className="countdown-pair__unit">秒</span>
+            </span>
+          </span>
+        </>
+      ) : (
+        <span className="countdown-bar__done">良辰已到，盼与您相逢</span>
+      )}
+    </div>
+  );
 }
 
 export default function App() {
@@ -115,18 +196,18 @@ export default function App() {
   const [bgmOn, setBgmOn] = useState(false);
   const [bgmError, setBgmError] = useState("");
   const [countdown, setCountdown] = useState<CountdownParts | null>(() => {
-    const t = new Date(INVITE.eventAt).getTime();
-    return Number.isFinite(t) ? parseCountdown(t, Date.now()) : null;
+    return Number.isFinite(EVENT_AT_MS) ? parseCountdown(EVENT_AT_MS, Date.now()) : null;
   });
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const copyResetTimer = useRef<number | null>(null);
+  const bgmButtonLabel = bgmOn ? "暂停背景音乐" : "播放背景音乐";
 
   useEffect(() => {
-    const targetMs = new Date(INVITE.eventAt).getTime();
-    if (!Number.isFinite(targetMs)) {
+    if (!Number.isFinite(EVENT_AT_MS)) {
       setCountdown(null);
       return;
     }
-    const tick = () => setCountdown(parseCountdown(targetMs, Date.now()));
+    const tick = () => setCountdown(parseCountdown(EVENT_AT_MS, Date.now()));
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
@@ -142,19 +223,7 @@ export default function App() {
     a.muted = false;
     const sync = () => setBgmOn(!a.paused);
     const onError = () => {
-      const mediaError = a.error;
-      const code = mediaError?.code;
-      const detail =
-        code === 1
-          ? "播放被中止"
-          : code === 2
-            ? "网络错误"
-            : code === 3
-              ? "音频解码失败"
-              : code === 4
-                ? "音频资源不可用"
-                : "音频加载失败";
-      setBgmError(`背景音乐播放失败：${detail}`);
+      setBgmError(`背景音乐播放失败：${mediaErrorMessage(a.error)}`);
       setBgmOn(false);
     };
     a.addEventListener("play", sync);
@@ -165,6 +234,25 @@ export default function App() {
       a.removeEventListener("pause", sync);
       a.removeEventListener("error", onError);
     };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimer.current !== null) {
+        window.clearTimeout(copyResetTimer.current);
+      }
+    };
+  }, []);
+
+  const showCopiedFeedback = useCallback(() => {
+    if (copyResetTimer.current !== null) {
+      window.clearTimeout(copyResetTimer.current);
+    }
+    setCopied(true);
+    copyResetTimer.current = window.setTimeout(() => {
+      setCopied(false);
+      copyResetTimer.current = null;
+    }, COPY_FEEDBACK_MS);
   }, []);
 
   const toggleBgm = useCallback(() => {
@@ -196,8 +284,7 @@ export default function App() {
     const text = INVITE.addressFull;
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      showCopiedFeedback();
     } catch {
       try {
         const ta = document.createElement("textarea");
@@ -208,13 +295,12 @@ export default function App() {
         ta.select();
         document.execCommand("copy");
         document.body.removeChild(ta);
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 2000);
+        showCopiedFeedback();
       } catch {
         window.prompt("请长按复制地址：", text);
       }
     }
-  }, []);
+  }, [showCopiedFeedback]);
 
   return (
     <div className="page">
@@ -233,107 +319,122 @@ export default function App() {
         className={`bgm-fab ${bgmOn ? "bgm-fab--on" : ""}`}
         onClick={toggleBgm}
         aria-pressed={bgmOn}
-        aria-label={bgmOn ? "暂停背景音乐" : "播放背景音乐"}
+        aria-label={bgmButtonLabel}
       >
         <span className="bgm-fab__glyph" aria-hidden="true">
-          {bgmOn ? (
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <rect x="3" y="3" width="3.5" height="10" rx="1" />
-              <rect x="9.5" y="3" width="3.5" height="10" rx="1" />
-            </svg>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M4 2.5L13 8 4 13.5z" />
-            </svg>
-          )}
+          <BgmIcon playing={bgmOn} />
         </span>
         <span className="bgm-fab__label">{bgmOn ? "暂停" : "音乐"}</span>
       </button>
 
       <header className="hero" aria-label="封面">
-        <p className="eyebrow">Wedding Invitation</p>
-        <h1 className="title title--couple">
-          <span className="name">{INVITE.groom}</span>
-          <span className="name-join" aria-hidden="true">
-            &
-          </span>
-          <span className="name">{INVITE.bride}</span>
-        </h1>
-        <p className="lead">{INVITE.subtitle}</p>
-        <div
-          className="countdown-bar"
-          role="timer"
-          aria-label={
-            countdown
-              ? `距开席还有 ${countdown.days} 天 ${countdown.hours} 小时 ${countdown.minutes} 分 ${countdown.seconds} 秒`
-              : "良辰已到"
-          }
-        >
-          {countdown ? (
-            <>
-              <span className="countdown-bar__label">距开席</span>
-              <span className="countdown-bar__sep" aria-hidden="true">
-                ·
-              </span>
-              <span className="countdown-bar__vals">
-                <span className="countdown-pair">
-                  <span className="countdown-pair__num">{countdown.days}</span>
-                  <span className="countdown-pair__unit">天</span>
-                </span>
-                <span className="countdown-pair">
-                  <span className="countdown-pair__num">{pad2(countdown.hours)}</span>
-                  <span className="countdown-pair__unit">时</span>
-                </span>
-                <span className="countdown-pair">
-                  <span className="countdown-pair__num">{pad2(countdown.minutes)}</span>
-                  <span className="countdown-pair__unit">分</span>
-                </span>
-                <span className="countdown-pair">
-                  <span className="countdown-pair__num">{pad2(countdown.seconds)}</span>
-                  <span className="countdown-pair__unit">秒</span>
-                </span>
-              </span>
-            </>
-          ) : (
-            <span className="countdown-bar__done">良辰已到，盼与您相逢</span>
-          )}
+        <div className="hero-card">
+          <img className="hero-ornament hero-ornament--floral" src={floralRibbonSrc} alt="" />
+          <img className="hero-ornament hero-ornament--petals" src={petalsSrc} alt="" />
+          <img className="hero-ornament hero-ornament--tassels" src={tasselsSrc} alt="" />
+          <p className="eyebrow">Wedding Invitation</p>
+          <img className="hero-seal-divider" src={goldVineDividerSrc} alt="" />
+          <h1 className="title title--couple">
+            <span className="name">{INVITE.groom}</span>
+            <span className="name-join" aria-hidden="true">
+              &
+            </span>
+            <span className="name">{INVITE.bride}</span>
+          </h1>
+          <p className="lead">{INVITE.subtitle}</p>
+          <p className="hero-poem">山河远阔，人间烟火，今日与君共赴一场长久的欢喜。</p>
+          <div className="hero-meta" aria-label="婚礼概览">
+            <span>{INVITE.dateLine}</span>
+            <span>{INVITE.timeLine}</span>
+            <span>{INVITE.venueName}</span>
+          </div>
+          <CountdownBar countdown={countdown} />
+          {bgmError ? <p className="bgm-error">{bgmError}</p> : null}
         </div>
-        {bgmError ? <p className="bgm-error">{bgmError}</p> : null}
       </header>
 
       <main className="sections">
-        <section className="card photo-card" aria-labelledby="photo-heading">
-          <h2 id="photo-heading" className="card-title">
-            结婚照
-          </h2>
-          <figure className="wedding-photo-wrap">
-            <img
-              className="wedding-photo"
-              src={weddingPhotoSrc}
-              width={1024}
-              height={1024}
-              alt={`${INVITE.groom}与${INVITE.bride}的结婚照`}
-              loading="lazy"
-              decoding="async"
-            />
-            <figcaption className="wedding-photo-caption">囍 · 留作纪念</figcaption>
-          </figure>
+        <section className="card feature-card photo-card" aria-labelledby="photo-heading">
+          <img className="card-ornament card-ornament--photo" src={floralRibbonSrc} alt="" />
+          <div className="section-heading">
+            <span>01</span>
+            <div>
+              <h2 id="photo-heading" className="card-title">
+                结婚照
+              </h2>
+              <p className="section-subtitle">The Memory</p>
+            </div>
+          </div>
+          <div className="photo-album">
+            <span className="photo-album__tape photo-album__tape--left" aria-hidden="true" />
+            <span className="photo-album__tape photo-album__tape--right" aria-hidden="true" />
+            <figure className="wedding-photo-wrap">
+              <img
+                className="wedding-photo"
+                src={weddingPhotoSrc}
+                width={1024}
+                height={1024}
+                alt={`${INVITE.groom}与${INVITE.bride}的结婚照`}
+                loading="lazy"
+                decoding="async"
+              />
+              <figcaption className="wedding-photo-caption">
+                <span>我们的合影</span>
+                <span>{INVITE.groom} · {INVITE.bride}</span>
+              </figcaption>
+            </figure>
+            <div className="photo-album__note" aria-hidden="true">
+              <span>LOVE STORY</span>
+              <strong>囍</strong>
+            </div>
+          </div>
         </section>
 
-        <section className="card" aria-labelledby="when-heading">
-          <h2 id="when-heading" className="card-title">
-            良辰
-          </h2>
-          <p className="card-line accent">{INVITE.dateLine}</p>
-          <p className="card-line">{INVITE.timeLine}</p>
+        <section className="card feature-card event-card" aria-labelledby="when-heading">
+          <img className="card-divider-art" src={goldVineDividerSrc} alt="" />
+          <img className="card-info-badges card-info-badges--event" src={infoBadgesSrc} alt="" />
+          <div className="section-heading">
+            <span>02</span>
+            <div>
+              <h2 id="when-heading" className="card-title">
+                婚礼日程
+              </h2>
+              <p className="section-subtitle">Wedding Schedule</p>
+            </div>
+          </div>
+          <div className="event-grid">
+            <div className="event-tile">
+              <span className="event-tile__label">良辰</span>
+              <p>{INVITE.dateLine}</p>
+            </div>
+            <div className="event-tile">
+              <span className="event-tile__label">开席</span>
+              <p>{INVITE.timeLine}</p>
+            </div>
+          </div>
         </section>
 
-        <section className="card" aria-labelledby="where-heading">
-          <h2 id="where-heading" className="card-title">
-            地点
-          </h2>
-          <p className="card-line accent">{INVITE.venueName}</p>
-          <p className="card-line muted">{INVITE.addressFull}</p>
+        <section className="card feature-card location-card" aria-labelledby="where-heading">
+          <img className="card-ornament card-ornament--where" src={petalsSrc} alt="" />
+          <img className="card-info-badges card-info-badges--where" src={infoBadgesSrc} alt="" />
+          <div className="section-heading">
+            <span>03</span>
+            <div>
+              <h2 id="where-heading" className="card-title">
+                宴会地点
+              </h2>
+              <p className="section-subtitle">Banquet Venue</p>
+            </div>
+          </div>
+          <div className="location-panel">
+            <span className="location-panel__pin" aria-hidden="true">
+              ⌖
+            </span>
+            <div>
+              <p className="card-line accent">{INVITE.venueName}</p>
+              <p className="card-line muted">{INVITE.addressFull}</p>
+            </div>
+          </div>
           <div className="nav-actions">
             <div className="nav-row">
               <a className="map-link" href={MAP_GAODE} rel="noopener">

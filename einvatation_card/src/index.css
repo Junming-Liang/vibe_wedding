@@ -1,17 +1,21 @@
 :root {
   color-scheme: light;
-  --bg: #fff8f5;
-  --bg-deep: #ffe8e0;
-  --surface: #fffdfb;
-  --ink: #3d1518;
-  --muted: #7a4a4f;
-  --accent: #c41e3a;
-  --accent-gold: #c9a227;
-  --accent-soft: #ffe4e8;
-  --gold-line: rgba(201, 162, 39, 0.45);
+  --bg: #fff7ee;
+  --bg-deep: #f8dccd;
+  --surface: rgba(255, 253, 248, 0.9);
+  --surface-strong: #fffaf2;
+  --ink: #351619;
+  --muted: #795353;
+  --accent: #b91e32;
+  --accent-deep: #7f1423;
+  --accent-gold: #b88a2b;
+  --accent-soft: #ffe2df;
+  --sage: #6d7b55;
+  --gold-line: rgba(184, 138, 43, 0.48);
+  --shadow: 0 20px 60px rgba(74, 25, 28, 0.13);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
     -apple-system, sans-serif;
   line-height: 1.55;
   font-weight: 400;
@@ -34,22 +38,55 @@ html {
 body {
   margin: 0;
   min-height: 100dvh;
-  background: var(--bg);
+  background-color: var(--bg);
   background-image: radial-gradient(
-      ellipse 120% 80% at 50% -20%,
-      var(--bg-deep),
-      var(--bg) 55%
+      ellipse 90% 55% at 50% -8%,
+      rgba(185, 30, 50, 0.16),
+      transparent 62%
     ),
     radial-gradient(
-      circle at 100% 100%,
-      rgba(196, 30, 58, 0.06),
-      transparent 45%
+      circle at 95% 8%,
+      rgba(184, 138, 43, 0.18),
+      transparent 32%
     ),
     radial-gradient(
-      circle at 0% 80%,
-      rgba(201, 162, 39, 0.08),
-      transparent 40%
+      circle at 0% 78%,
+      rgba(109, 123, 85, 0.16),
+      transparent 36%
+    ),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 245, 235, 0.26)),
+    repeating-linear-gradient(
+      45deg,
+      rgba(184, 138, 43, 0.035) 0,
+      rgba(184, 138, 43, 0.035) 1px,
+      transparent 1px,
+      transparent 12px
     );
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  width: 16rem;
+  height: 16rem;
+  border-radius: 999px;
+  filter: blur(2px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+body::before {
+  left: -8rem;
+  top: 5rem;
+  background: radial-gradient(circle, rgba(185, 30, 50, 0.14), transparent 66%);
+}
+
+body::after {
+  right: -8rem;
+  bottom: 9rem;
+  background: radial-gradient(circle, rgba(184, 138, 43, 0.16), transparent 68%);
 }
 
 #root {

@@ -15,6 +15,8 @@ dotenv.config({ path: path.join(__dirname, "..", ".env") });
 const PORT = Number(process.env.PORT || 3840);
 /** 默认仅监听本机，不对外网开放；确需对外监听时设 HOST=0.0.0.0（不推荐） */
 const HOST = process.env.HOST || "127.0.0.1";
+const LOOPBACK_ADDRESSES = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+const ADMIN_MESSAGE_STATUSES = new Set(["pending", "approved", "rejected", "all"]);
 
 /** 包根（含 package.json、.env），相对 DATABASE_PATH 均相对此目录，避免 systemd / 手动启动 cwd 不同导致「写了库 A、后台看库 B」 */
 const pkgRoot = path.join(__dirname, "..");
@@ -54,14 +56,67 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_visits_updated_at ON visits(updated_at DESC);
 `);
 
+const statements = {
+  publicMessages: db.prepare(
+    `SELECT id, author, content, reviewed_at AS approvedAt
+     FROM messages
+     WHERE status = 'approved'
+     ORDER BY reviewed_at ASC, id ASC
+     LIMIT 120`,
+  ),
+  insertMessage: db.prepare(
+    `INSERT INTO messages (author, content, status, created_at, client_ip)
+     VALUES (@author, @content, 'pending', @now, @ip)`,
+  ),
+  upsertVisit: db.prepare(
+    `INSERT INTO visits (name, phone, attendees, created_at, updated_at, client_ip)
+     VALUES (@name, @phone, @attendees, @now, @now, @ip)
+     ON CONFLICT(phone) DO UPDATE SET
+       name = excluded.name,
+       attendees = excluded.attendees,
+       updated_at = excluded.updated_at,
+       client_ip = excluded.client_ip`,
+  ),
+  adminMessagesAll: db.prepare(
+    `SELECT id, author, content, status, created_at, reviewed_at, client_ip
+     FROM messages
+     ORDER BY created_at DESC
+     LIMIT 500`,
+  ),
+  adminMessagesByStatus: db.prepare(
+    `SELECT id, author, content, status, created_at, reviewed_at, client_ip
+     FROM messages
+     WHERE status = ?
+     ORDER BY created_at DESC
+     LIMIT 500`,
+  ),
+  approveMessage: db.prepare(
+    `UPDATE messages SET status = 'approved', reviewed_at = @now
+     WHERE id = @id AND status = 'pending'`,
+  ),
+  rejectMessage: db.prepare(
+    `UPDATE messages SET status = 'rejected', reviewed_at = @now
+     WHERE id = @id AND status = 'pending'`,
+  ),
+  deleteMessage: db.prepare("DELETE FROM messages WHERE id = ?"),
+  listVisits: db.prepare(
+    `SELECT id, name, phone, attendees, created_at, updated_at, client_ip
+     FROM visits
+     ORDER BY updated_at DESC, id DESC
+     LIMIT 1000`,
+  ),
+  exportVisits: db.prepare(
+    `SELECT name, phone, attendees, updated_at
+     FROM visits
+     ORDER BY updated_at DESC, id DESC`,
+  ),
+  deleteVisit: db.prepare("DELETE FROM visits WHERE id = ?"),
+};
+
 /** 管理接口仅允许环回（勿用 X-Forwarded-For 判断，防伪造）。经本机 Nginx 反代到 Node 时，对端仍为 127.0.0.1。 */
 function requireLoopback(req, res, next) {
   const raw = req.socket.remoteAddress || "";
-  const ok =
-    raw === "127.0.0.1" ||
-    raw === "::1" ||
-    raw === "::ffff:127.0.0.1";
-  if (!ok) {
+  if (!LOOPBACK_ADDRESSES.has(raw)) {
     return res.status(403).json({
       error:
         "管理接口仅允许本机访问。请在服务器上打开 http://127.0.0.1:" +
@@ -119,6 +174,24 @@ function normalizeAttendees(raw) {
   return n;
 }
 
+function parsePositiveId(raw) {
+  const id = Number(raw);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+function sumAttendees(rows) {
+  return rows.reduce((sum, row) => sum + Number(row.attendees || 0), 0);
+}
+
+function sendJsonError(res, status, message) {
+  return res.status(status).json({ error: message });
+}
+
+function sendServerError(res, error, message) {
+  console.error(error);
+  return sendJsonError(res, 500, message);
+}
+
 const app = express();
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
@@ -156,13 +229,13 @@ app.use(express.json({ limit: "12kb" }));
 
 /** express-rate-limit@5 兼容 Node 12；v7 起依赖包内含 ?. 无法在旧版 V8 上解析 */
 function json429(res, msg) {
-  res.status(429).json({ error: msg });
+  sendJsonError(res, 429, msg);
 }
 
 const submitLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  handler: (req, res) => {
+  handler: (_req, res) => {
     json429(res, "提交过于频繁，请稍后再试");
   },
 });
@@ -178,7 +251,7 @@ const visitSubmitLimiter = rateLimit({
 const publicReadLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 120,
-  handler: (req, res) => {
+  handler: (_req, res) => {
     json429(res, "请求过于频繁，请稍后再试");
   },
 });
@@ -186,7 +259,7 @@ const publicReadLimiter = rateLimit({
 const adminLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 400,
-  handler: (req, res) => {
+  handler: (_req, res) => {
     json429(res, "管理接口请求过于频繁");
   },
 });
@@ -240,7 +313,7 @@ function escapeHtml(s) {
 
 function buildVisitsExcel(rows) {
   const totalGuests = rows.length;
-  const totalAttendees = rows.reduce((sum, row) => sum + Number(row.attendees || 0), 0);
+  const totalAttendees = sumAttendees(rows);
   const tableRows = rows
     .map(
       (row, idx) =>
@@ -271,15 +344,7 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/messages/public", publicReadLimiter, (_req, res) => {
   try {
-    const rows = db
-      .prepare(
-        `SELECT id, author, content, reviewed_at AS approvedAt
-         FROM messages
-         WHERE status = 'approved'
-         ORDER BY reviewed_at ASC, id ASC
-         LIMIT 120`,
-      )
-      .all();
+    const rows = statements.publicMessages.all();
     res.json({
       items: rows.map((r) => ({
         id: r.id,
@@ -289,8 +354,7 @@ app.get("/api/messages/public", publicReadLimiter, (_req, res) => {
       })),
     });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "服务暂时不可用" });
+    sendServerError(res, e, "服务暂时不可用");
   }
 });
 
@@ -305,22 +369,16 @@ app.post("/api/messages", submitLimiter, (req, res) => {
   const author = normalizeAuthor(body.author);
   const content = normalizeContent(body.content);
   if (!content) {
-    return res.status(400).json({ error: "留言内容无效或过长（最多 200 字）" });
+    return sendJsonError(res, 400, "留言内容无效或过长（最多 200 字）");
   }
 
   const now = Date.now();
   const ip = clientIp(req);
   try {
-    const info = db
-      .prepare(
-        `INSERT INTO messages (author, content, status, created_at, client_ip)
-         VALUES (@author, @content, 'pending', @now, @ip)`,
-      )
-      .run({ author, content, now, ip });
+    const info = statements.insertMessage.run({ author, content, now, ip });
     res.status(201).json({ ok: true, id: Number(info.lastInsertRowid) });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "保存失败，请稍后再试" });
+    sendServerError(res, e, "保存失败，请稍后再试");
   }
 });
 
@@ -331,166 +389,123 @@ app.post("/api/visits", visitSubmitLimiter, (req, res) => {
   const attendees = normalizeAttendees(body.attendees);
 
   if (!name) {
-    return res.status(400).json({ error: "姓名不能为空，最多 24 个字" });
+    return sendJsonError(res, 400, "姓名不能为空，最多 24 个字");
   }
   if (!phone) {
-    return res.status(400).json({ error: "电话格式无效，请填写 6 到 20 位数字" });
+    return sendJsonError(res, 400, "电话格式无效，请填写 6 到 20 位数字");
   }
   if (attendees == null) {
-    return res.status(400).json({ error: "参加宴席人数无效，请填写 1 到 20 之间的整数" });
+    return sendJsonError(res, 400, "参加宴席人数无效，请填写 1 到 20 之间的整数");
   }
 
   const now = Date.now();
   const ip = clientIp(req);
   try {
-    const info = db
-      .prepare(
-        `INSERT INTO visits (name, phone, attendees, created_at, updated_at, client_ip)
-         VALUES (@name, @phone, @attendees, @now, @now, @ip)
-         ON CONFLICT(phone) DO UPDATE SET
-           name = excluded.name,
-           attendees = excluded.attendees,
-           updated_at = excluded.updated_at,
-           client_ip = excluded.client_ip`,
-      )
-      .run({ name, phone, attendees, now, ip });
+    const info = statements.upsertVisit.run({ name, phone, attendees, now, ip });
     res.status(201).json({ ok: true, id: Number(info.lastInsertRowid || 0) });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "登记失败，请稍后再试" });
+    sendServerError(res, e, "登记失败，请稍后再试");
   }
 });
 
 app.get("/api/admin/messages", adminLimiter, requireLoopback, (req, res) => {
   const status = (req.query.status || "pending").toString();
-  const allowed = ["pending", "approved", "rejected", "all"];
-  if (!allowed.includes(status)) {
-    return res.status(400).json({ error: "无效的 status" });
+  if (!ADMIN_MESSAGE_STATUSES.has(status)) {
+    return sendJsonError(res, 400, "无效的 status");
   }
-  let sql = `SELECT id, author, content, status, created_at, reviewed_at, client_ip FROM messages`;
-  const params = [];
-  if (status !== "all") {
-    sql += ` WHERE status = ?`;
-    params.push(status);
-  }
-  sql += ` ORDER BY created_at DESC LIMIT 500`;
+
   try {
-    const rows = db.prepare(sql).all(...params);
+    const rows =
+      status === "all"
+        ? statements.adminMessagesAll.all()
+        : statements.adminMessagesByStatus.all(status);
     res.json({ items: rows.map(mapAdminRow) });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "查询失败" });
+    sendServerError(res, e, "查询失败");
   }
 });
 
 app.post("/api/admin/messages/:id/approve", adminLimiter, requireLoopback, (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isFinite(id) || id <= 0) {
-    return res.status(400).json({ error: "无效的 id" });
+  const id = parsePositiveId(req.params.id);
+  if (id == null) {
+    return sendJsonError(res, 400, "无效的 id");
   }
   const now = Date.now();
-  const r = db
-    .prepare(
-      `UPDATE messages SET status = 'approved', reviewed_at = @now
-       WHERE id = @id AND status = 'pending'`,
-    )
-    .run({ now, id });
+  const r = statements.approveMessage.run({ now, id });
   if (r.changes === 0) {
-    return res.status(404).json({ error: "未找到待审核留言或已处理" });
+    return sendJsonError(res, 404, "未找到待审核留言或已处理");
   }
   res.json({ ok: true });
 });
 
 app.post("/api/admin/messages/:id/reject", adminLimiter, requireLoopback, (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isFinite(id) || id <= 0) {
-    return res.status(400).json({ error: "无效的 id" });
+  const id = parsePositiveId(req.params.id);
+  if (id == null) {
+    return sendJsonError(res, 400, "无效的 id");
   }
   const now = Date.now();
-  const r = db
-    .prepare(
-      `UPDATE messages SET status = 'rejected', reviewed_at = @now
-       WHERE id = @id AND status = 'pending'`,
-    )
-    .run({ now, id });
+  const r = statements.rejectMessage.run({ now, id });
   if (r.changes === 0) {
-    return res.status(404).json({ error: "未找到待审核留言或已处理" });
+    return sendJsonError(res, 404, "未找到待审核留言或已处理");
   }
   res.json({ ok: true });
 });
 
 app.delete("/api/admin/messages/:id", adminLimiter, requireLoopback, (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isFinite(id) || id <= 0) {
-    return res.status(400).json({ error: "无效的 id" });
+  const id = parsePositiveId(req.params.id);
+  if (id == null) {
+    return sendJsonError(res, 400, "无效的 id");
   }
   try {
-    const r = db.prepare("DELETE FROM messages WHERE id = ?").run(id);
+    const r = statements.deleteMessage.run(id);
     if (r.changes === 0) {
-      return res.status(404).json({ error: "留言不存在" });
+      return sendJsonError(res, 404, "留言不存在");
     }
     res.json({ ok: true });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "删除失败" });
+    sendServerError(res, e, "删除失败");
   }
 });
 
 app.get("/api/admin/visits", adminLimiter, requireLoopback, (_req, res) => {
   try {
-    const rows = db
-      .prepare(
-        `SELECT id, name, phone, attendees, created_at, updated_at, client_ip
-         FROM visits
-         ORDER BY updated_at DESC, id DESC
-         LIMIT 1000`,
-      )
-      .all();
+    const rows = statements.listVisits.all();
     const items = rows.map(mapVisitRow);
     const stats = {
       totalGuests: items.length,
-      totalAttendees: items.reduce((sum, item) => sum + Number(item.attendees || 0), 0),
+      totalAttendees: sumAttendees(items),
     };
     res.json({ items, stats });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "查询失败" });
+    sendServerError(res, e, "查询失败");
   }
 });
 
 app.get("/api/admin/visits/export", adminLimiter, requireLoopback, (_req, res) => {
   try {
-    const rows = db
-      .prepare(
-        `SELECT name, phone, attendees, updated_at
-         FROM visits
-         ORDER BY updated_at DESC, id DESC`,
-      )
-      .all();
+    const rows = statements.exportVisits.all();
     const xls = buildVisitsExcel(rows);
     res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="wedding-visits-${Date.now()}.xls"`);
     res.send("\ufeff" + xls);
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "导出失败" });
+    sendServerError(res, e, "导出失败");
   }
 });
 
 app.delete("/api/admin/visits/:id", adminLimiter, requireLoopback, (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isFinite(id) || id <= 0) {
-    return res.status(400).json({ error: "无效的 id" });
+  const id = parsePositiveId(req.params.id);
+  if (id == null) {
+    return sendJsonError(res, 400, "无效的 id");
   }
   try {
-    const r = db.prepare("DELETE FROM visits WHERE id = ?").run(id);
+    const r = statements.deleteVisit.run(id);
     if (r.changes === 0) {
-      return res.status(404).json({ error: "登记记录不存在" });
+      return sendJsonError(res, 404, "登记记录不存在");
     }
     res.json({ ok: true });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "删除失败" });
+    sendServerError(res, e, "删除失败");
   }
 });
 
@@ -511,7 +526,7 @@ if (fs.existsSync(publicDir)) {
 }
 
 app.use((_req, res) => {
-  res.status(404).json({ error: "Not found" });
+  sendJsonError(res, 404, "Not found");
 });
 
 app.listen(PORT, HOST, () => {

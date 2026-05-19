@@ -1,45 +1,43 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import {
   formatHttpJsonError,
-  inviteApiEndpoint,
+  inviteActionEndpoint,
   mapFetchError,
-  parseJsonBody,
-  phpBridgeHref,
-  usePhpBridge,
+  requestJsonEnvelope,
 } from "./inviteApi";
 
 type PublicMessage = { id: number; author: string; content: string };
 
 async function fetchPublic(): Promise<PublicMessage[]> {
-  const url = usePhpBridge() ? phpBridgeHref("public") : inviteApiEndpoint("/messages/public");
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    });
-  } catch (e) {
-    throw new Error(mapFetchError(e));
-  }
-  const text = await res.text();
-  const ct = res.headers.get("content-type") || "";
-  const parsed = parseJsonBody(text);
+  const { url, phpBridge } = inviteActionEndpoint("public");
+  const { response, payload, contentType } = await requestJsonEnvelope(url, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
 
-  if (!ct.includes("application/json") && !parsed?.items && !parsed?.error) {
-    const hint = usePhpBridge()
+  if (!contentType.includes("application/json") && !payload?.items && !payload?.error) {
+    const hint = phpBridge
       ? "未收到 JSON：请确认已将 invite-2026-messages-bridge.php 拷到站点根且 PHP 可执行。"
       : "未收到 JSON：多为 Nginx 未将 /invite-2026/api/ 反代到 Node，或改用站点根 PHP 桥（见 README）。";
-    throw new Error(`加载失败 (${res.status})。${hint}`);
+    throw new Error(`加载失败 (${response.status})。${hint}`);
   }
 
-  if (!res.ok) {
-    throw new Error(formatHttpJsonError(res.status, parsed, usePhpBridge(), "加载"));
+  if (!response.ok) {
+    throw new Error(formatHttpJsonError(response.status, payload, phpBridge, "加载"));
   }
 
-  if (!parsed || !Array.isArray(parsed.items)) {
+  if (!payload || !Array.isArray(payload.items)) {
     throw new Error("加载失败：返回数据格式异常。");
   }
-  return parsed.items;
+  return payload.items as PublicMessage[];
 }
 
 async function submitMessage(body: {
@@ -47,39 +45,40 @@ async function submitMessage(body: {
   content: string;
   _hp: string;
 }): Promise<void> {
-  const url = usePhpBridge() ? phpBridgeHref("message_submit") : inviteApiEndpoint("/messages");
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch (e) {
-    throw new Error(mapFetchError(e));
-  }
-  const text = await res.text();
-  const parsed = parseJsonBody(text) as JsonEnvelope | null;
+  const { url, phpBridge } = inviteActionEndpoint("messageSubmit");
+  const { response, payload } = await requestJsonEnvelope(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
 
-  if (!res.ok) {
-    if (res.status === 405) {
+  if (!response.ok) {
+    if (response.status === 405) {
       throw new Error(
-        usePhpBridge()
+        phpBridge
           ? "提交失败 (405)：站点根 PHP 可能未部署或未被 PHP-FPM 执行。"
           : "提交失败 (405)：POST 未到达留言服务。请将 Nginx 配置 /invite-2026/api/ 反代到 Node，或按 README 部署站点根 PHP 桥。",
       );
     }
-    if (res.status === 502 && parsed) {
-      throw new Error(formatHttpJsonError(502, parsed, usePhpBridge(), "提交"));
+    if (response.status === 502 && payload) {
+      throw new Error(formatHttpJsonError(502, payload, phpBridge, "提交"));
     }
-    throw new Error(parsed?.error || `提交失败 (${res.status})`);
+    throw new Error(payload?.error || `提交失败 (${response.status})`);
   }
 
-  if (parsed && (parsed.honeypot === true || parsed.id === 0)) {
+  if (payload && (payload.honeypot === true || payload.id === 0)) {
     throw new Error(
       "留言未入库：隐藏防刷项被填写（常见于浏览器自动填表）。请清空页面底部「请勿填写」框后重试。",
     );
   }
+}
+
+function sameMessages(a: PublicMessage[], b: PublicMessage[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((item, idx) => {
+    const next = b[idx];
+    return item.id === next.id && item.author === next.author && item.content === next.content;
+  });
 }
 
 export function MessageWall() {
@@ -97,7 +96,7 @@ export function MessageWall() {
     setLoadErr("");
     try {
       const list = await fetchPublic();
-      setItems(list);
+      setItems((prev) => (sameMessages(prev, list) ? prev : list));
     } catch (e) {
       setLoadErr(mapFetchError(e));
     }
@@ -115,7 +114,18 @@ export function MessageWall() {
     return Math.min(90, Math.max(28, n * 9));
   }, [items.length]);
 
-  const onSubmit = async (e: FormEvent) => {
+  const tickerItems = useMemo(() => [...items, ...items], [items]);
+  const tickerKey = useMemo(() => items.map((m) => m.id).join(","), [items]);
+
+  const onAuthorChange = useCallback((ev: ChangeEvent<HTMLInputElement>) => {
+    setAuthor(ev.target.value);
+  }, []);
+
+  const onContentChange = useCallback((ev: ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(ev.target.value);
+  }, []);
+
+  const onSubmit = useCallback(async (e: FormEvent) => {
     e.preventDefault();
     setSubmitOk("");
     setSubmitErr("");
@@ -142,7 +152,7 @@ export function MessageWall() {
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [author, content]);
 
   return (
     <section className="card message-wall-card" aria-labelledby="wall-heading">
@@ -160,9 +170,9 @@ export function MessageWall() {
           <div
             className="message-wall-track"
             style={{ animationDuration: `${durationSec}s` }}
-            key={items.map((m) => m.id).join(",")}
+            key={tickerKey}
           >
-            {[...items, ...items].map((m, i) => (
+            {tickerItems.map((m, i) => (
               <span key={`${m.id}-${i}`} className="message-wall-chip">
                 {m.author ? (
                   <>
@@ -193,7 +203,7 @@ export function MessageWall() {
           className="message-wall-input"
           maxLength={24}
           value={author}
-          onChange={(ev) => setAuthor(ev.target.value)}
+          onChange={onAuthorChange}
           placeholder="如：老同学 张三"
           autoComplete="off"
         />
@@ -207,7 +217,7 @@ export function MessageWall() {
           maxLength={200}
           rows={3}
           value={content}
-          onChange={(ev) => setContent(ev.target.value)}
+          onChange={onContentChange}
           placeholder="一句心意即可，最多 200 字"
         />
         <div className="message-wall-counter" aria-live="polite">
